@@ -1,0 +1,69 @@
+There are no arrays, instead values are indexed using dimensions.
+
+Dimension names are unique globally
+
+Reducing dimensions:
+
+sum by x : reduces dimension x - Changes set D + {x} into D
+min by x
+in general fold by x
+
+
+Dependent dimensions:
+
+In general when dealing with multiple dimensions we can image them as multidimensional array
+with value for each combination A[x, y, z, ...]
+
+However sometimes value along dimension x can influence range of other dimension y
+we then write y -> x (y depends on x)
+This represents situations like strings
+
+x | y -> 
+1  "abc"
+2  "abcd"
+3  "x"
+
+----
+
+{x, y} y -> x
+x | y ->
+----
+1 | 1, 2, 3
+2 | 5, 6
+3 | 7
+
+sum by y is indexed by x [6, 11, 7]
+what is sum by x? can we even do that?
+maybe the result should be 13, 8, 3 indexed by sum of y?
+or maybe it should be completely reduced because different ys can have totally different ranges?
+
+
+---
+
+Introducing dimensions
+
+Sometimes a new dimension can be introduced.
+
+e.g. if we want to split string into characters or substrings:
+
+`split("abc") = ['a', 'b', 'c']`
+We get a new dimension (index of character) for each string in the input.
+
+In other words, given dimensions D we get D + {x} with x -> D (x dependent on all dimensions in D)
+
+----
+
+Some functions can operate pointwise, some can operate on whole tensors, how do we express that?
+
+`add(x: Int, y: Int) = x + y`
+`add([x1, x2], [y1, y2]) = [x1 + y1, x2 + y2]`
+
+`sum(x: Int, axis: Dim) = ...`
+`sum([1, 2, 3]) = 6`
+`sum([[1, 2, 3], [5, 6]]) = [6, 11]`
+
+---
+
+Cross products?
+
+ 
