@@ -25,6 +25,14 @@ class InUnion[V](DirectConstraint):
 
     def mapped[W](self, mapping: Dict[V, W]) -> 'InUnion[W]':
         return InUnion(self.dim, tuple(mapping[d] for d in self.dim_set_vars))
+    
+    def __str__(self):
+        dim_set_vars_str = ",".join(str(d) for d in self.dim_set_vars)
+        if len(self.dim_set_vars) == 1:
+            return f"{self.dim} in {dim_set_vars_str}"
+        else:
+            return f"{self.dim} in Union({dim_set_vars_str})"
+
 
 # a \notin X
 @dataclass(frozen=True)
@@ -35,6 +43,9 @@ class NotIn[V](DirectConstraint):
     def mapped[W](self, mapping: Dict[V, W]) -> 'NotIn[W]':
         return NotIn(self.dim, mapping[self.dim_set_var])
 
+    def __str__(self):
+        return f"{self.dim} not in {self.dim_set_var}"
+
 # X = Y
 @dataclass(frozen=True)
 class Equal[V](DirectConstraint):
@@ -44,17 +55,44 @@ class Equal[V](DirectConstraint):
     def mapped[W](self, mapping: Dict[V, W]) -> 'DirectConstraint[W]':
         return Equal(mapping[self.lhs], mapping[self.rhs])
     
+    def str(self):
+        return f"{self.lhs} == {self.rhs}"
+    
 
-# Y <== Union(X_1, ..., X_n) ? A
+@dataclass(frozen=True)
+class Inducer[V]:
+    dim_set_var: V
+    filtered_dims: Tuple[Dim]
+
+    def mapped[W](self, mapping: Dict[V, W]) -> 'Inducer[W]':
+        return Inducer(mapping[self.dim_set_var], self.filtered_dims)
+    
+    def __str__(self):
+        if len(self.filtered_dims) == 0:
+            return str(self.dim_set_var)
+        else:
+            dims_str = ",".join(str(d) for d in self.filtered_dims)
+            return f"{self.dim_set_var} ? {{{dims_str}}}"
+
+# Y <== Union(X_1 ? A_1, ..., X_n ? A_n)
 @dataclass(frozen=True)
 class InducedBy[V](IndirectConstraint):
     induced: V
-    inducers: Tuple[V]
-    filtered_dims: Tuple[Dim]
+    inducers: Tuple[Inducer[V]]
 
     def mapped[W](self, mapping: Dict[V, W]) -> 'InducedBy[W]':
-        mapped_inducers = tuple(mapping[i] for i in self.inducers)
-        return InducedBy(mapping[self.induced], mapped_inducers, self.filtered_dims)
+        mapped_inducers = tuple(i.mapped(mapping) for i in self.inducers)
+        return InducedBy(mapping[self.induced], mapped_inducers)
+    
+    def inducer_vars(self):
+        return set(i.dim_set_var for i in self.inducers)
+
+    
+    def __str__(self):
+        inducers_str = ",".join(str(i) for i in self.inducers)
+        if len(self.inducers) == 1:
+            return f"{self.induced} <== {inducers_str}"
+        return f"{self.induced} <== Union({inducers_str})"
 
 # a depends on everything from X except explicitly removed dims
 # a -> X
@@ -65,6 +103,9 @@ class DependsOn[V](IndirectConstraint):
 
     def mapped[W](self, mapping: Dict[V, W]) -> 'InducedBy[W]':
         return DependsOn(self.dim, mapping[self.dim_set_var])
+
+    def __str__(self):
+        return f"{self.dim} -> {self.dim_set_var}"
 
 @dataclass
 class BlockTy:
@@ -139,7 +180,7 @@ def remove_dim_type(dim: Dim) -> BlockTy:
     in_constraint = InUnion(dim, (in_dim_set_var, ))
     out_constraint = NotIn(dim, out_dim_set_var)
     direct_constraints = [in_constraint, out_constraint]
-    indirect_constraints = [InducedBy(out_dim_set_var, (in_dim_set_var,), (dim, ))]
+    indirect_constraints = [InducedBy(out_dim_set_var, (Inducer(in_dim_set_var, (dim,)),) )]
     return BlockTy([in_dim_set_var], [out_dim_set_var], direct_constraints, indirect_constraints)
 
 def add_fresh_dim_type(dim: Dim) -> BlockTy:
@@ -147,7 +188,7 @@ def add_fresh_dim_type(dim: Dim) -> BlockTy:
     out_dim_set_var = "d_out"
     in_constraints = [InUnion(dim, (out_dim_set_var, )), NotIn(dim, in_dim_set_var)]
     dependency_constraint = DependsOn(dim, in_dim_set_var)
-    induction_constraint = InducedBy(out_dim_set_var, (in_dim_set_var, ), (dim, ))
+    induction_constraint = InducedBy(out_dim_set_var, (Inducer(in_dim_set_var, (dim, ) ),))
     indirect_constraints = [dependency_constraint, induction_constraint]
     return BlockTy([in_dim_set_var], [out_dim_set_var], in_constraints, indirect_constraints)
 
@@ -203,12 +244,11 @@ def infer_types(schema: BlockSchema, typing: Typing) -> BlockTy:
     
     relevant_facts = set()
     relevant_vertices = set(schema.in_vertices + schema.out_vertices)
-    print("Relevant vertices:", relevant_vertices)
     print("facts after")
     for f in facts:
         print(f)
         if isinstance(f, InducedBy):
-            if f.induced in relevant_vertices and all(d in relevant_vertices for d in f.inducers):
+            if f.induced in relevant_vertices and all(d in relevant_vertices for d in f.inducer_vars()):
                 relevant_facts.add(f)
         elif isinstance(f, NotIn):
             if f.dim_set_var in relevant_vertices:
@@ -233,18 +273,19 @@ def apply_inference(f1, f2):
             print("VERY SUS")
             return Equal(f1.lhs, f2.rhs)
         elif isinstance(f2, InducedBy) and f1.rhs is f2.induced:
-            #   X = Y       Y <== Union(X_1,...,X_n) ? A
+            #   X = Y       Y <== Union(X_1 ? A_1,...,X_n ? A_n)
             #  --------------------------------------------
-            #          X <== Union(X_1,...,X_n) ? A
-            return InducedBy(f1.lhs, f2.inducers, f2.filtered_dims)
-        elif isinstance(f2, InducedBy) and f1.lhs in f2.inducers:
+            #          X <== Union(X_1 ? A_1,...,X_n ? A_n) 
+            return InducedBy(f1.lhs, f2.inducers)
+        elif isinstance(f2, InducedBy) and f1.lhs in f2.inducer_vars():
             #   X = Y       Z <== Union(X, X_1,...,X_n) ? A
             #  --------------------------------------------
-            #          X <== Union(Y, X_1,...,X_n) ? A
-            inducers = set(f2.inducers)
-            inducers.remove(f1.lhs)
-            inducers.add(f1.rhs)
-            return InducedBy(f2.induced, tuple(inducers), f2.filtered_dims)
+            #          Z <== Union(Y, X_1,...,X_n) ? A
+            inducers = {i.dim_set_var:i.filtered_dims for i in f2.inducers}
+            inducers[f1.rhs] = inducers[f1.lhs]
+            del inducers[f1.lhs]
+            inducers = tuple(Inducer(d, f) for d, f in inducers.items())
+            return InducedBy(f2.induced, tuple(inducers))
         elif isinstance(f2, NotIn) and f1.rhs is f2.dim_set_var:
             return NotIn(f2.dim, f1.lhs)
         elif isinstance(f2, InUnion) and f1.lhs in f2.dim_set_vars:
@@ -254,34 +295,61 @@ def apply_inference(f1, f2):
             return InUnion(f2.dim, tuple(dim_set_vars))
             
 
-    elif isinstance(f1, InducedBy) and isinstance(f2, InducedBy) and f2.induced in f1.inducers:
-        #  Z <== Union(Y, Y_1,...,Y_k) ? B      Y <== Union(X_1,...,X_n) ? A      
-        # -------------------------------------------------------------------
-        #      Y <== Union(Y_1,...,Y_k, X_1, ..., X_n) ? (A intersect B)
-        filtered_dims = tuple(set(f1.filtered_dims).intersection(f2.filtered_dims))
-        inducers = set(f1.inducers).union(f2.inducers)
-        inducers.remove(f2.induced)
-        return InducedBy(f1.induced, tuple(inducers), filtered_dims)
+    elif isinstance(f1, InducedBy) and isinstance(f2, InducedBy) and f2.induced in f1.inducer_vars():
+        return infer_transitive_induction(f1, f2)
+        
     elif isinstance(f1, InducedBy) and isinstance(f2, InducedBy) and f1.induced is f2.induced:
-        #  Z <== Union(X_1,...,X_n) ? A     Z <== Union(Y_1,...,Y_k) ? B
-        # ---------------------------------------------------------------
-        #    Z <== Union(X_1, ..., X_n, Y_1,...,Y_k) ? (A intersect B)
-        inducers = set(f1.inducers).union(f2.inducers)
-        filtered_dims = tuple(set(f1.filtered_dims).intersection(f2.filtered_dims))
-        return InducedBy(f1.induced, tuple(inducers), filtered_dims)
+        return infer_induction_union(f1, f2)
     elif isinstance(f1, InducedBy) and isinstance(f2, NotIn) and f1.induced is f2.dim_set_var:
-        # Y <== Union(X_1,...,X_n) ? A   a not in A     a not in Y   
-        # ----------------------------------------------------------
-        #           a not X_1     ...     a not in X_n
-        if f2.dim not in f1.filtered_dims:
-            return [NotIn(f2.dim, inducer) for inducer in f1.inducers]
+        # Y <== Union(X_1 ? A_1,..., A_n) ? A    a not in Y   a not in A_i
+        # -----------------------------------------------------------------
+        #                           a not in X_i
+        return [NotIn(f2.dim, inducer.dim_set_var) for inducer in f1.inducers if f2.dim not in inducer.filtered_dims]
     elif isinstance(f1, InducedBy) and isinstance(f2, InUnion):
-        # Y <== Union(X_1,...,X_n) ? A     a not in A   a in Union(X_i1,...,X_ik)  
-        # ---------------------------------------------------------------------
-        #                             a in Y
-        if f2.dim not in f1.filtered_dims and all(d in f1.inducers for d in f2.dim_set_vars):
-            return InUnion(f2.dim, (f1.induced, ))
+        return infer_in_union_induction(f1, f2)
     return None
+
+def infer_transitive_induction(lhs: InducedBy, rhs: InducedBy):
+    #  Z <== Union(Y ? B, Y_1 ? B_1,...,Y_k ? B_k)    Y <== Union(X_1 ? A_1,...,X_n ? A_n)    
+    # --------------------------------------------------------------------------------------
+    #      Z <== Union(X_1 ? (A_1 u B), ..., X_n ? (A_n u B), Y_1 ? B_1,...,Y_k ? B_k)
+    #
+    #  If Y_i = X_j then we get X_j ? ((A_j union B) intersect B_i)
+
+    old_inducers = { i.dim_set_var:i.filtered_dims for i in lhs.inducers }
+    rhs_induced_filtered = old_inducers[rhs.induced]
+    new_inducers = { i.dim_set_var:set(i.filtered_dims).union(rhs_induced_filtered) for i in rhs.inducers }
+
+    redundant_inducers = set(i for i in old_inducers if i in new_inducers)
+    for i in redundant_inducers:
+        new_inducers[i] = new_inducers[i].intersection(old_inducers[i])
+        del old_inducers[i]
+    
+    del old_inducers[rhs.induced]
+
+    inducers = []
+    for i in old_inducers:
+        inducers.append(Inducer(i,tuple(old_inducers[i])))
+    for i in new_inducers:
+        inducers.append(Inducer(i,tuple(new_inducers[i])))
+
+    return InducedBy(lhs.induced, tuple(inducers))
+
+# is this even needed? we should never get two inductions such that one does not reduce to the other
+def infer_induction_union(lhs: InducedBy, rhs: InducedBy):
+    #  Z <== Union(X_1 ? A_1,...,X_n ? A_n)    Z <== Union(Y_1 ? B_1,..., Y_k ? B_k)
+    # ---------------------------------------------------------------
+    #    Z <== Union(X_1 ? A_1, ..., X_n ? A_n, Y_1 ? B,...,Y_k ? B)
+    pass
+
+def infer_in_union_induction(lhs: InducedBy, rhs: InUnion):
+    inducers = { i.dim_set_var : i.filtered_dims for i in lhs.inducers }
+    if all(d in inducers and rhs.dim not in inducers[d] for d in rhs.dim_set_vars):
+        # Z <== Union(X_1 ? A_1, ..., X_n ? A_n)    a in Union(X_i1,..., X_ik)   a not in Union(A_i1, ..., A_ik)
+        # ------------------------------------------------------------------------------------------------------
+        #                           a in Z
+        return InUnion(rhs.dim, (lhs.induced,))
+
 
 
 def convert_to_graphviz(schema: BlockSchema):
