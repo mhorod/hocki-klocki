@@ -100,12 +100,18 @@ class InducedBy[V](IndirectConstraint):
 class DependsOn[V](IndirectConstraint):
     dim: Dim
     dim_set_var: V
+    filtered_dims: Tuple[Dim]
 
     def mapped[W](self, mapping: Dict[V, W]) -> 'InducedBy[W]':
-        return DependsOn(self.dim, mapping[self.dim_set_var])
+        return DependsOn(self.dim, mapping[self.dim_set_var], self.filtered_dims)
 
     def __str__(self):
-        return f"{self.dim} -> {self.dim_set_var}"
+        filtered_dims_str = ",".join(str(d) for d in self.filtered_dims)
+        if len(self.filtered_dims) == 0:
+            return f"{self.dim} -> {self.dim_set_var}"
+        else:
+            return f"{self.dim} -> {self.dim_set_var} ? {{{filtered_dims_str}}}"
+            
 
 @dataclass
 class BlockTy:
@@ -187,7 +193,7 @@ def add_fresh_dim_type(dim: Dim) -> BlockTy:
     in_dim_set_var = "d_in"
     out_dim_set_var = "d_out"
     in_constraints = [InUnion(dim, (out_dim_set_var, )), NotIn(dim, in_dim_set_var)]
-    dependency_constraint = DependsOn(dim, in_dim_set_var)
+    dependency_constraint = DependsOn(dim, in_dim_set_var, tuple())
     induction_constraint = InducedBy(out_dim_set_var, (Inducer(in_dim_set_var, (dim, ) ),))
     indirect_constraints = [dependency_constraint, induction_constraint]
     return BlockTy([in_dim_set_var], [out_dim_set_var], in_constraints, indirect_constraints)
@@ -256,6 +262,9 @@ def infer_types(schema: BlockSchema, typing: Typing) -> BlockTy:
         elif isinstance(f, InUnion):
             if all(d in relevant_vertices for d in f.dim_set_vars):
                 relevant_facts.add(f)
+        elif isinstance(f, DependsOn):
+            if f.dim_set_var in relevant_vertices:
+                relevant_facts.add(f)
 
 
     print()
@@ -286,14 +295,15 @@ def apply_inference(f1, f2):
             del inducers[f1.lhs]
             inducers = tuple(Inducer(d, f) for d, f in inducers.items())
             return InducedBy(f2.induced, tuple(inducers))
-        elif isinstance(f2, NotIn) and f1.rhs is f2.dim_set_var:
-            return NotIn(f2.dim, f1.lhs)
+        elif isinstance(f2, NotIn) and f1.lhs is f2.dim_set_var:
+            return NotIn(f2.dim, f1.rhs)
         elif isinstance(f2, InUnion) and f1.lhs in f2.dim_set_vars:
             dim_set_vars = set(f2.dim_set_vars)
             dim_set_vars.remove(f1.lhs)
             dim_set_vars.add(f1.rhs)
             return InUnion(f2.dim, tuple(dim_set_vars))
-            
+        elif isinstance(f2, DependsOn) and f1.lhs is f2.dim_set_var:
+            return DependsOn(f2.dim, f1.rhs, f2.filtered_dims)
 
     elif isinstance(f1, InducedBy) and isinstance(f2, InducedBy) and f2.induced in f1.inducer_vars():
         return infer_transitive_induction(f1, f2)
@@ -307,6 +317,8 @@ def apply_inference(f1, f2):
         return [NotIn(f2.dim, inducer.dim_set_var) for inducer in f1.inducers if f2.dim not in inducer.filtered_dims]
     elif isinstance(f1, InducedBy) and isinstance(f2, InUnion):
         return infer_in_union_induction(f1, f2)
+    elif isinstance(f1, InducedBy) and isinstance(f2, DependsOn):
+        return infer_dependency_induction(f1, f2)
     return None
 
 def infer_transitive_induction(lhs: InducedBy, rhs: InducedBy):
@@ -345,12 +357,20 @@ def infer_induction_union(lhs: InducedBy, rhs: InducedBy):
 def infer_in_union_induction(lhs: InducedBy, rhs: InUnion):
     inducers = { i.dim_set_var : i.filtered_dims for i in lhs.inducers }
     if all(d in inducers and rhs.dim not in inducers[d] for d in rhs.dim_set_vars):
-        # Z <== Union(X_1 ? A_1, ..., X_n ? A_n)    a in Union(X_i1,..., X_ik)   a not in Union(A_i1, ..., A_ik)
+        # Y <== Union(X_1 ? A_1, ..., X_n ? A_n)    a in Union(X_i1,..., X_ik)   a not in Union(A_i1, ..., A_ik)
         # ------------------------------------------------------------------------------------------------------
-        #                           a in Z
+        #                           a in Y
         return InUnion(rhs.dim, (lhs.induced,))
 
+    # TODO: inducing when a in Y
 
+def infer_dependency_induction(lhs: InducedBy, rhs: DependsOn):
+    # Y <== Union(X_1 ? A_1, ..., X_n ? A_n)     a -> Y
+    # -----------------------------------
+    #           a -> X_i ? A_i
+    if rhs.dim_set_var is lhs.induced:
+        return [DependsOn(rhs.dim, i.dim_set_var, i.filtered_dims) for i in lhs.inducers]
+    
 
 def convert_to_graphviz(schema: BlockSchema):
     subgraphs = ""
@@ -372,44 +392,44 @@ def convert_to_graphviz(schema: BlockSchema):
 
     return f"strict digraph {{{inner}\n}}"
 
+def chained_dimension_introductions_example():
+    add_dim_schema_0 = builtin_schema(1, 1)
+    add_dim_ty_0 = add_fresh_dim_type("fresh0")
 
-add_dim_schema_0 = builtin_schema(1, 1)
-add_dim_ty_0 = add_fresh_dim_type("fresh0")
+    add_dim_schema_1 = builtin_schema(1, 1)
+    add_dim_ty_1 = add_fresh_dim_type("fresh1")
 
-add_dim_schema_1 = builtin_schema(1, 1)
-add_dim_ty_1 = add_fresh_dim_type("fresh1")
+    b0 = add_dim_schema_0.instantiate()
+    b1 = add_dim_schema_1.instantiate()
+    v0 = Vertex.input()
+    v1 = b0.mapping[add_dim_schema_0.in_vertices[0]]
+    v2 = b0.mapping[add_dim_schema_0.out_vertices[0]]
+    v3 = b1.mapping[add_dim_schema_1.in_vertices[0]]
+    v4 = b1.mapping[add_dim_schema_1.out_vertices[0]]
+    v5 = Vertex.output()
+    block_schema = BlockSchema([v0], [v5], [b0, b1], {
+        v0: [v1],
+        v2: [v3],
+        v4: [v5],
+    })
 
-b0 = add_dim_schema_0.instantiate()
-b1 = add_dim_schema_1.instantiate()
-v0 = Vertex.input()
-v1 = b0.mapping[add_dim_schema_0.in_vertices[0]]
-v2 = b0.mapping[add_dim_schema_0.out_vertices[0]]
-v3 = b1.mapping[add_dim_schema_1.in_vertices[0]]
-v4 = b1.mapping[add_dim_schema_1.out_vertices[0]]
-v5 = Vertex.output()
-block_schema = BlockSchema([v0], [v5], [b0, b1], {
-    v0: [v1],
-    v2: [v3],
-    v4: [v5],
-})
+    #      X1
+    #      |
+    #    [+ fresh0]  
+    #      |
+    #      Y1
+    #      |
+    #      X2
+    #      |
+    #    [+ fresh1]
+    #      |
+    #      Y2
+    #
+    typing = {
+        add_dim_schema_0: add_dim_ty_0,
+        add_dim_schema_1: add_dim_ty_1
+    }
+    block_type = infer_types(block_schema, typing)
 
-#      X1
-#      |
-#    [+ fresh0]  
-#      |
-#      Y1
-#      |
-#      X2
-#      |
-#    [+ fresh1]
-#      |
-#      Y2
-#
-typing = {
-    add_dim_schema_0: add_dim_ty_0,
-    add_dim_schema_1: add_dim_ty_1
-}
-block_type = infer_types(block_schema, typing)
-
-print(block_type)
-print(convert_to_graphviz(block_schema))
+    print(block_type)
+    print(convert_to_graphviz(block_schema))
