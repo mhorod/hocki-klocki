@@ -177,7 +177,8 @@ def builtin_schema(in_count: int, out_count: int) -> BlockSchema:
 def union_type(in_count: int) -> BlockTy:
     in_dim_set_vars = [f"d_in_{i}" for i in range(in_count)]
     out_dim_set_var = "d_out"
-    constraints = [InducedBy(out_dim_set_var, in_dim_set_var, tuple()) for in_dim_set_var in in_dim_set_vars] 
+    inducers = [Inducer(d, tuple()) for d in in_dim_set_vars]
+    constraints = [InducedBy(out_dim_set_var, tuple(inducers))]
     return BlockTy(in_dim_set_vars, [out_dim_set_var], [], constraints)
 
 def remove_dim_type(dim: Dim) -> BlockTy:
@@ -280,6 +281,7 @@ def apply_inference(f1, f2):
     if isinstance(f1, Equal):
         if isinstance(f2, Equal) and f1.rhs is f2.lhs and f1.lhs is not f2.rhs:
             print("VERY SUS")
+            print(f1.lhs, f2.rhs)
             return Equal(f1.lhs, f2.rhs)
         elif isinstance(f2, InducedBy) and f1.rhs is f2.induced:
             #   X = Y       Y <== Union(X_1 ? A_1,...,X_n ? A_n)
@@ -311,10 +313,7 @@ def apply_inference(f1, f2):
     elif isinstance(f1, InducedBy) and isinstance(f2, InducedBy) and f1.induced is f2.induced:
         return infer_induction_union(f1, f2)
     elif isinstance(f1, InducedBy) and isinstance(f2, NotIn) and f1.induced is f2.dim_set_var:
-        # Y <== Union(X_1 ? A_1,..., A_n) ? A    a not in Y   a not in A_i
-        # -----------------------------------------------------------------
-        #                           a not in X_i
-        return [NotIn(f2.dim, inducer.dim_set_var) for inducer in f1.inducers if f2.dim not in inducer.filtered_dims]
+        return infer_not_in_induction(f1, f2)
     elif isinstance(f1, InducedBy) and isinstance(f2, InUnion):
         return infer_in_union_induction(f1, f2)
     elif isinstance(f1, InducedBy) and isinstance(f2, DependsOn):
@@ -361,8 +360,20 @@ def infer_in_union_induction(lhs: InducedBy, rhs: InUnion):
         # ------------------------------------------------------------------------------------------------------
         #                           a in Y
         return InUnion(rhs.dim, (lhs.induced,))
+    elif lhs.induced in rhs.dim_set_vars:
+        # Y <== Union(X_1 ? A_1, ..., X_n ? A_n)    a in Y 
+        # --------------------------------------------------
+        #              a in Union(X_1, ..., X_n)
 
-    # TODO: inducing when a in Y
+        return InUnion(rhs.dim, tuple(lhs.inducer_vars()))
+
+def infer_not_in_induction(lhs: InducedBy, rhs: NotIn):
+    if rhs.dim_set_var is lhs.induced:
+        # Y <== Union(X_1 ? A_1,..., A_n) ? A    a not in Y   a not in A_i
+        # -----------------------------------------------------------------
+        #                           a not in X_i
+        return [NotIn(rhs.dim, inducer.dim_set_var) for inducer in lhs.inducers if rhs.dim not in inducer.filtered_dims]
+
 
 def infer_dependency_induction(lhs: InducedBy, rhs: DependsOn):
     # Y <== Union(X_1 ? A_1, ..., X_n ? A_n)     a -> Y
@@ -433,3 +444,101 @@ def chained_dimension_introductions_example():
 
     print(block_type)
     print(convert_to_graphviz(block_schema))
+
+def chained_dimension_removal_example():
+    remove_dim_schema_0 = builtin_schema(1, 1)
+    remove_dim_ty_0 = remove_dim_type("fresh0")
+
+    remove_dim_schema_1 = builtin_schema(1, 1)
+    remove_dim_ty_1 = remove_dim_type("fresh1")
+
+    b0 = remove_dim_schema_0.instantiate()
+    b1 = remove_dim_schema_1.instantiate()
+    v0 = Vertex.input()
+    v1 = b0.mapping[remove_dim_schema_0.in_vertices[0]]
+    v2 = b0.mapping[remove_dim_schema_0.out_vertices[0]]
+    v3 = b1.mapping[remove_dim_schema_1.in_vertices[0]]
+    v4 = b1.mapping[remove_dim_schema_1.out_vertices[0]]
+    v5 = Vertex.output()
+    block_schema = BlockSchema([v0], [v5], [b0, b1], {
+        v0: [v1],
+        v2: [v3],
+        v4: [v5],
+    })
+
+    #      X1
+    #      |
+    #    [- fresh0]  
+    #      |
+    #      Y1
+    #      |
+    #      X2
+    #      |
+    #    [- fresh1]
+    #      |
+    #      Y2
+    #
+    typing = {
+        remove_dim_schema_0: remove_dim_ty_0,
+        remove_dim_schema_1: remove_dim_ty_1
+    }
+    block_type = infer_types(block_schema, typing)
+
+    print(convert_to_graphviz(block_schema))
+
+def parallel_dimension_removal_example():
+    X1 = Vertex.input()
+    X2 = Vertex.input()
+    Y1 = Vertex.output()
+
+    sum_ty = union_type(2)
+    remove_a_ty = remove_dim_type('a')
+    remove_b_ty = remove_dim_type('b')
+    sum_schema = builtin_schema(2, 1)
+    remove_a_schema = builtin_schema(1, 1)
+    remove_b_schema = builtin_schema(1, 1)
+
+    s0 = sum_schema.instantiate()
+    s1 = sum_schema.instantiate()
+    a0 = remove_a_schema.instantiate()
+    b0 = remove_b_schema.instantiate()
+
+    v0 = s0.mapping[sum_schema.in_vertices[0]]
+    v1 = s0.mapping[sum_schema.in_vertices[1]]
+    v2 = b0.mapping[remove_b_schema.in_vertices[0]]
+
+    v3 = s0.mapping[sum_schema.out_vertices[0]]
+    v4 = b0.mapping[remove_b_schema.out_vertices[0]]
+
+    v5 = a0.mapping[remove_a_schema.in_vertices[0]]
+    v6 = a0.mapping[remove_a_schema.out_vertices[0]]
+
+    v7 = s1.mapping[sum_schema.in_vertices[0]]
+    v8 = s1.mapping[sum_schema.in_vertices[1]]
+    v9 = s1.mapping[sum_schema.out_vertices[0]]
+
+    schema = BlockSchema(
+        [X1, X2], [Y1],
+        [s0, s1, a0, b0],
+        {
+            X1: [v0],
+            X2: [v1, v2],
+            v3: [v5],
+            v4: [v8],
+            v6: [v7],
+            v9: [Y1]
+        }
+                         )
+
+    typing = {
+        sum_schema: sum_ty,
+        remove_a_schema: remove_a_ty,
+        remove_b_schema: remove_b_ty
+    }
+
+
+    infer_types(schema, typing)
+    print(convert_to_graphviz(schema))
+
+
+parallel_dimension_removal_example()
