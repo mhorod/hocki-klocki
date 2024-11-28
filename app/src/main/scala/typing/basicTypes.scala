@@ -1,0 +1,36 @@
+package hocki.klocki
+package typing
+
+import semantics.dims.{Dim, DimSetVar}
+
+import semantics.graphs.{BlockSchema, builtinSchema}
+
+def addDimSchema(dim: Dim): (BlockSchema, BlockTy) =
+  val schema = builtinSchema(1, 1)
+  val x = schema.inVertices.head
+  val y = schema.outVertices.head
+  val constraints = Set(
+    dim notIn x,
+    dim inUnion Set(y),
+    dim dependsOn (x without Set(dim)),
+    y inducedBy Set(x without Set(dim)),
+  )
+  (schema, BlockTy(constraints))
+
+def removeDimTy(dim: Dim): (BlockSchema, BlockTy) =
+  val schema = builtinSchema(1, 1)
+  val x = schema.inVertices.head
+  val y = schema.outVertices.head
+  val constraints = Set(
+    dim inUnion Set(y),
+    dim notIn x,
+    y inducedBy Set(x without Set(dim))
+  )
+  (schema, BlockTy(constraints))
+
+def unionTy(n: Int): (BlockSchema, BlockTy) =
+  val schema = builtinSchema(n, 1)
+  val xs = schema.inVertices
+  val y = schema.outVertices.head
+  val constraints: Set[Constraint] = Set(y inducedBy xs.toSet.map(_ without Set()))
+  (schema, BlockTy(constraints))
