@@ -27,7 +27,8 @@ def inferTypes(schema: BlockSchema, typing: Typing): BlockTy =
 
   println(schema.edges)
 
-  println(inferInductions(constraints))
+  val inductions = inferInductions(constraints)
+  inductions.values.foreach(println)
 
   BlockTy(Set())
 

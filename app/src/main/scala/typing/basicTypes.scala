@@ -17,7 +17,7 @@ def addDimSchema(dim: Dim): (BlockSchema, BlockTy) =
   )
   (schema, BlockTy(constraints))
 
-def removeDimTy(dim: Dim): (BlockSchema, BlockTy) =
+def removeDimSchema(dim: Dim): (BlockSchema, BlockTy) =
   val schema = builtinSchema(1, 1)
   val x = schema.inVertices.head
   val y = schema.outVertices.head
@@ -28,8 +28,8 @@ def removeDimTy(dim: Dim): (BlockSchema, BlockTy) =
   )
   (schema, BlockTy(constraints))
 
-def unionTy(n: Int): (BlockSchema, BlockTy) =
-  val schema = builtinSchema(n, 1)
+def unionSchema(inCount: Int): (BlockSchema, BlockTy) =
+  val schema = builtinSchema(inCount, 1)
   val xs = schema.inVertices
   val y = schema.outVertices.head
   val constraints: Set[Constraint] = Set(y inducedBy xs.toSet.map(_ without Set()))
