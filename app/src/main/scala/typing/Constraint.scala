@@ -22,6 +22,6 @@ enum Constraint:
     case NotIn(dim, dimSetVar) => NotIn(dim, mapping(dimSetVar))
     case DependsOn(dim, filteredDimSetVar) => DependsOn(dim, filteredDimSetVar.map(mapping))
     case InducedBy(induced, inducers) => InducedBy(mapping(induced), inducers.map(_.map(mapping)))
-
+    
 extension (inducedBy: InducedBy)
   def inducerDimSetVars: Set[DimSetVar] = inducedBy.inducers.map(_.dimSetVar)

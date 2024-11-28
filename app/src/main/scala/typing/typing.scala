@@ -38,29 +38,51 @@ def inferInductions(constraints: Set[Constraint]): Map[DimSetVar, InducedBy] =
     .map((k, v) => k -> unionInductions(v))
     .to(mutable.Map)
 
-  var inProgress = true
-  while inProgress do
-    inProgress = false
-    for inducedA <- inductions.keys; inducedB <- inductions.keys do
-      val inductionA = inductions(inducedA)
-      val inductionB = inductions(inducedB)
-      if inductionA.inducerDimSetVars.contains(inducedB) then
-        ???
+
+  val workList = mutable.Set[(DimSetVar, DimSetVar)]()
+  for inducedA <- inductions.keys; inducedB <- inductions.keys do
+    if inducedA != inducedB && inductions(inducedA).inducerDimSetVars.contains(inducedB) then
+      workList.addOne((inducedA, inducedB))
+
+  while workList.nonEmpty do
+    val (inducedA, inducedB) = workList.head
+    workList.remove((inducedA, inducedB))
+
+    val joined = joinInductions(inductions(inducedA), inductions(inducedB)) union inductions(inducedA)
+    if joined != inductions(inducedA) then
+      inductions(inducedA) = joined
+      workList.addAll(inductions(inducedA).inducerDimSetVars.filter(inductions.contains).map((inducedA, _)))
+      for inducedC <- inductions.keys do
+        if inducedC != inducedA && inductions(inducedC).inducerDimSetVars.contains(inducedA) then
+            workList.addOne((inducedC, inducedA))
 
   inductions.toMap
 
-def joinInductions(by: InducedBy, by1: InducedBy): InducedBy = ???
+def joinInductions(lhs: InducedBy, rhs: InducedBy): InducedBy =
+  val filtered = lhs.inducers.find(_.dimSetVar == rhs.induced).get.filteredDimensions
+  val newInducers = rhs.inducers.map(
+    inducer =>
+      FilteredDimSetVar(inducer.dimSetVar, inducer.filteredDimensions union filtered)
+  )
+
+  val inducers = unifyInducers(lhs.inducers ++ newInducers)
+  InducedBy(lhs.induced, inducers)
+
+
+extension (inducedBy: InducedBy)
+  infix def union(other: InducedBy): InducedBy = unionInductions(Set(inducedBy, other))
 
 def unionInductions(inductions: Set[InducedBy]): InducedBy =
-  val inducers = inductions
-    .flatMap(_.inducers)
+  val inducers = unifyInducers(inductions.flatMap(_.inducers))
+  InducedBy(inductions.head.induced, inducers)
+
+def unifyInducers(inducers: Set[FilteredDimSetVar]): Set[FilteredDimSetVar] =
+  inducers
     .groupBy(_.dimSetVar)
     .map((k, v) => k -> v.map(_.filteredDimensions))
     .map((k, v) => k -> v.reduce(_ intersect _))
     .map((k, v) => FilteredDimSetVar(k, v))
     .toSet
-  InducedBy(inductions.head.induced, inducers)
-
 
 def coalesceConnectedVertices(blockSchema: BlockSchema): Map[DimSetVar, DimSetVar] =
   blockSchema.edges.map(_.swap).toMap ++ blockSchema.edges.map(e => (e(0), e(0))).toMap
