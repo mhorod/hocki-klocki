@@ -5,4 +5,6 @@ import semantics.dims.DimSetVar
 import hocki.klocki.typing.Constraint.InducedBy
 
 @main
-def main(): Unit = parallelDimensionRemovalExample
+def main(): Unit =
+  // chainedDimensionIntroductionsExample
+  parallelDimensionRemovalExample

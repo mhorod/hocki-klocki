@@ -2,7 +2,7 @@ package hocki.klocki
 
 import names.{NameGenerator, SimpleNameGenerator}
 import semantics.dims.{Dim, DimSetVar}
-import semantics.graphs.{BlockSchema}
+import semantics.graphs.BlockSchema
 import typing.{addDimSchema, inferTypes, removeDimSchema, unionSchema}
 
 given NameGenerator = SimpleNameGenerator()

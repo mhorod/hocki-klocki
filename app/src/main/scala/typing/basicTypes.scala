@@ -22,8 +22,8 @@ def removeDimSchema(dim: Dim): (BlockSchema, BlockTy) =
   val x = schema.inVertices.head
   val y = schema.outVertices.head
   val constraints = Set(
-    dim inUnion Set(y),
-    dim notIn x,
+    dim notIn y,
+    dim inUnion Set(x),
     y inducedBy Set(x without Set(dim))
   )
   (schema, BlockTy(constraints))
