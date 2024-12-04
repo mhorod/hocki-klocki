@@ -4,7 +4,9 @@ package typing
 import scala.collection.mutable
 import semantics.graphs.{BlockSchema, Edge}
 import semantics.dims.DimSetVar
-import typing.Constraint.{InUnion, InducedBy, NotIn}
+import typing.Constraint.{In, InUnion, InducedBy, NotIn}
+
+import scala.reflect.ClassTag
 
 type Typing = mutable.Map[BlockSchema, BlockTy]
 
@@ -30,21 +32,12 @@ def inferTypes(schema: BlockSchema, typing: Typing): BlockTy =
 
   val inductions = inferInductions(constraints)
 
-  val notIns = inferNotIns(constraints, inductions)
-  val dimsToNotIns = notIns.groupBy(_.dim)
+  val ins = inferIns(getConstraints[In](constraints), inductions.values.toSet)
+  val notIns = inferNotIns(getConstraints[NotIn](constraints), inductions)
+  val inUnions = inferInUnions(getConstraints[InUnion](constraints), inductions, notIns)
 
-  val inUnions = inferInUnions(constraints, inductions)
-  val reducedInUnions = inUnions.map(
-    inUnion =>
-      val excluded = dimsToNotIns.getOrElse(inUnion.dim, Set()).map(_.dimSetVar)
-      val reduced: InUnion = InUnion(inUnion.dim, inUnion.union diff excluded)
-      if reduced.union.isEmpty then
-        throw IllegalStateException(s"Absurd constraint $reduced")
-      reduced
-  )
-
-  println("Inductions:")
-  inductions.values.foreach(println)
+  println("Ins:")
+  ins.foreach(println)
 
   println("Not ins:")
   notIns.foreach(println)
@@ -52,56 +45,54 @@ def inferTypes(schema: BlockSchema, typing: Typing): BlockTy =
   println("In unions:")
   inUnions.foreach(println)
 
-  val allConstraints = inductions.values.map[InducedBy](
-    inducedBy => InducedBy(inducedBy.induced, inducedBy.inducers.filter(d => unCoalescence.contains(d.dimSetVar)))
-  ).filter(inducedBy => unCoalescence.contains(inducedBy.induced))
-  ++ inUnions.map[InUnion](inUnion => InUnion(inUnion.dim, inUnion.union.filter(d => unCoalescence.contains(d))))
-    .filter(_.union.nonEmpty)
-  ++ notIns.filter(notIn => unCoalescence.contains(notIn.dimSetVar))
+  val relevantInductions =
+    inductions
+      .values
+      .map[InducedBy](
+        inducedBy =>
+          InducedBy(inducedBy.induced, inducedBy.inducers.filter(d => unCoalescence.contains(d.dimSetVar)))
+      )
+      .filter(inducedBy => unCoalescence.contains(inducedBy.induced))
+
+  val relevantIns = ins.filter(in => unCoalescence.contains(in.dimSetVar))
+  val relevantNotIns = notIns.filter(notIn => unCoalescence.contains(notIn.dimSetVar))
+
+  val relevantInUnions =
+    inUnions
+      .map[InUnion](inUnion => InUnion(inUnion.dim, inUnion.union.filter(d => unCoalescence.contains(d))))
+
+  val allConstraints = relevantInductions ++ relevantIns ++ relevantNotIns ++ relevantInUnions
 
   val finalConstraints = allConstraints.map(_.map(unCoalescence))
 
-  println("Final constraints:")
+  println("Final constraints")
   finalConstraints.foreach(println)
+
+  relevantInUnions.foreach { inUnion =>
+    if inUnion.union.isEmpty then
+      println(s"SUS: $inUnion")
+  }
 
   BlockTy(Set())
 
-def inferInUnions(constraints: Set[Constraint], inductions: Map[DimSetVar, InducedBy]): Set[InUnion] =
-  val inUnions = constraints.collect { case constraint: InUnion => constraint }
-  val propagatedUp = inUnions ++ propagateInUnionsUp(inUnions, inductions)
-  val propagatedDown = propagateInUnionsDown(propagatedUp, inductions.values.toSet)
-  propagatedUp ++ propagatedDown
+def inferIns(ins: Set[In], inductions: Set[InducedBy]): Set[In] =
+  ins ++ propagateInsDown(ins, inductions)
 
-def propagateInUnionsUp(inUnions: Set[InUnion], inductions: Map[DimSetVar, InducedBy]): Set[InUnion] =
- inUnions.map(inUnion =>
-      (
-        inUnion.dim,
-        inUnion.union.flatMap(
-          inductions.get(_)
-            .map(_.inducers)
-            .getOrElse(Set())
-            .filter(!_.filteredDimensions.contains(inUnion.dim))
-            .map(_.dimSetVar)
-        )
-      )
-    ).filter((dim, union) => union.nonEmpty)
-    .map[InUnion]((dim, union) => InUnion(dim, union))
+def inferNotIns(notIns: Set[NotIn], inductions: Map[DimSetVar, InducedBy]): Set[NotIn] =
+  notIns ++ propagateNotInsUp(notIns, inductions)
 
-def propagateInUnionsDown(inUnions: Set[InUnion], inductions: Set[InducedBy]): Set[InUnion] =
-  inUnions.flatMap {
-    inUnion => inductions.filter(
-      inducedBy =>
-        inUnion.union subsetOf inducedBy.inducers
-          .filter(inducer => !inducer.filteredDimensions.contains(inUnion.dim))
-          .map(_.dimSetVar)
-    ).map(inducedBy => InUnion(inUnion.dim, Set(inducedBy.induced)))
-  }
+def inferInUnions(inUnions: Set[InUnion], inductions: Map[DimSetVar, InducedBy], notIns: Set[NotIn]): Set[InUnion] =
+  inUnions ++ propagateInUnionsUp(inUnions, inductions, notIns)
 
-def inferNotIns(constraints: Set[Constraint], inductions: Map[DimSetVar, InducedBy]): Set[NotIn] =
-  val notIns = constraints.collect { case constraint: NotIn => constraint }
-  val propagatedUp = notIns ++ propagateNotInsUp(notIns, inductions)
-  val propagatedDown = propagateNotInsDown(propagatedUp.groupBy(_.dimSetVar), inductions.values.toSet)
-  propagatedUp ++ propagatedDown
+def getConstraints[V <: Constraint](constraints: Set[Constraint])(using classTag: ClassTag[V]): Set[V] =
+  constraints.collect { case c if classTag.runtimeClass.isInstance(c) => c.asInstanceOf[V] }
+
+def propagateInsDown(ins: Set[In], inductions: Set[InducedBy]): Set[In] =
+  ins ++ ins.flatMap(
+    in => inductions
+      .filter(_.inducerDimSetVars.contains(in.dimSetVar))
+      .map[In](i => In(in.dim, i.induced))
+  )
 
 def propagateNotInsUp(notIns: Set[NotIn], inductions: Map[DimSetVar, InducedBy]): Set[NotIn] =
   notIns.flatMap(
@@ -113,19 +104,28 @@ def propagateNotInsUp(notIns: Set[NotIn], inductions: Map[DimSetVar, InducedBy])
         .map[NotIn](inducer => NotIn(notIn.dim, inducer.dimSetVar))
   )
 
-def propagateNotInsDown(dimSetVarsToNotIns: Map[DimSetVar, Set[NotIn]], inductions: Set[InducedBy]): Set[NotIn] =
-  inductions.flatMap[NotIn] { inducedBy =>
-    val filtered = inducedBy.inducers.flatMap(_.filteredDimensions)
-    dimSetVarsToNotIns
-      .values
-      .map(v => v.filter(notIn => !filtered.contains(notIn.dim)).map(_.dim))
-      .reduce((x, y) => x intersect y)
-      .map(NotIn(_, inducedBy.induced))
-  }
+def propagateInUnionsUp(inUnions: Set[InUnion], inductions: Map[DimSetVar, InducedBy], notIns: Set[NotIn]): Set[InUnion] =
+  inUnions.map(
+    inUnion => (
+      inUnion.dim,
+      inUnion
+        .union
+        .flatMap(
+          elem =>
+            inductions
+              .get(elem)
+              .map(_.inducers)
+              .getOrElse(Set(elem without Set()))
+              .filter(inducer => !inducer.filteredDimensions.contains(inUnion.dim))
+              .map(_.dimSetVar)
+        )
+        .filter(dimSetVar => !notIns.contains(NotIn(inUnion.dim, dimSetVar)))
+    )
+  )
+    .map[InUnion]((dim, union) => InUnion(dim, union))
 
 def inferInductions(constraints: Set[Constraint]): Map[DimSetVar, InducedBy] =
-  val inductions = constraints
-    .collect { case constraint: InducedBy => constraint }
+  val inductions = getConstraints[InducedBy](constraints)
     .groupBy(_.induced)
     .map((k, v) => k -> unionInductions(v))
     .to(mutable.Map)

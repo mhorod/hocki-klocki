@@ -1,10 +1,12 @@
 package hocki.klocki
 
-import semantics.dims.DimSetVar
-
-import hocki.klocki.typing.Constraint.InducedBy
-
 @main
 def main(): Unit =
-  // chainedDimensionIntroductionsExample
+  println("--- CHAINED DIMENSION INTRODUCTION EXAMPLE ---")
+  chainedDimensionIntroductionsExample
+
+  println("--- PARALLEL DIMENSION INTRODUCTION EXAMPLE ---")
   parallelDimensionRemovalExample
+
+  println("--- SUS EXAMPLE ---")
+  susExample

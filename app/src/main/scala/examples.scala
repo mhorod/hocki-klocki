@@ -86,5 +86,39 @@ def parallelDimensionRemovalExample =
 
   inferTypes(schema, typing)
 
+def susExample =
+  val dim_a = Dim("a")
+  val (add_dim_a_schema, add_dim_a_ty) = addDimSchema(dim_a)
+  val (remove_dim_a_schema, remove_dim_a_ty) = removeDimSchema(dim_a)
 
+  val add_dim_a_block = add_dim_a_schema.instantiate
+  val remove_dim_a_block = remove_dim_a_schema.instantiate
 
+  val x = DimSetVar("X")
+  val y0 = DimSetVar("Y_0")
+  val y1 = DimSetVar("Y_1")
+
+  val v0 = add_dim_a_block.freshMapping(add_dim_a_block.schema.inVertices.head)
+  val v1 = add_dim_a_block.freshMapping(add_dim_a_block.schema.outVertices.head)
+
+  val v2 = remove_dim_a_block.freshMapping(remove_dim_a_block.schema.inVertices.head)
+  val v3 = remove_dim_a_block.freshMapping(remove_dim_a_block.schema.outVertices.head)
+
+  val schema = BlockSchema(
+    List(x),
+    List(y0, y1),
+    Set(add_dim_a_block, remove_dim_a_block),
+    Set(
+      x -> v0,
+      v1 -> y0,
+      x -> v2,
+      v3 -> y1,
+    )
+  )
+
+  val typing = collection.mutable.Map(
+    add_dim_a_schema -> add_dim_a_ty,
+    remove_dim_a_schema -> remove_dim_a_ty,
+  )
+
+  inferTypes(schema, typing)

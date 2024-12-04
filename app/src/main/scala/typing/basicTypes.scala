@@ -11,7 +11,7 @@ def addDimSchema(dim: Dim): (BlockSchema, BlockTy) =
   val y = schema.outVertices.head
   val constraints = Set(
     dim notIn x,
-    dim inUnion Set(y),
+    dim in y,
     dim dependsOn (x without Set(dim)),
     y inducedBy Set(x without Set(dim)),
   )
