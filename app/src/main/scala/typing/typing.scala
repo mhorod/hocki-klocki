@@ -3,7 +3,7 @@ package typing
 
 import scala.collection.mutable
 import semantics.graphs.{BlockSchema, Edge}
-import semantics.dims.{Dim, DimSetVar}
+import semantics.dims.DimSetVar
 import typing.Constraint.{InUnion, InducedBy, NotIn}
 
 type Typing = mutable.Map[BlockSchema, BlockTy]
@@ -115,13 +115,13 @@ def propagateNotInsUp(notIns: Set[NotIn], inductions: Map[DimSetVar, InducedBy])
 
 def propagateNotInsDown(dimSetVarsToNotIns: Map[DimSetVar, Set[NotIn]], inductions: Set[InducedBy]): Set[NotIn] =
   inductions.flatMap[NotIn] { inducedBy =>
-      val filtered = inducedBy.inducers.flatMap(_.filteredDimensions)
-      dimSetVarsToNotIns
-        .values
-        .map(v => v.filter(notIn => !filtered.contains(notIn.dim)).map(_.dim))
-        .reduce((x, y) => x intersect y)
-        .map(NotIn(_, inducedBy.induced))
-  }.toSet
+    val filtered = inducedBy.inducers.flatMap(_.filteredDimensions)
+    dimSetVarsToNotIns
+      .values
+      .map(v => v.filter(notIn => !filtered.contains(notIn.dim)).map(_.dim))
+      .reduce((x, y) => x intersect y)
+      .map(NotIn(_, inducedBy.induced))
+  }
 
 def inferInductions(constraints: Set[Constraint]): Map[DimSetVar, InducedBy] =
   val inductions = constraints
