@@ -15,7 +15,7 @@ enum Constraint:
     case InUnion(dim, union) => s"$dim ∈ U{${union.mkString(", ")}}"
     case NotIn(dim, dimSetVar) => s"$dim ∉ $dimSetVar"
     case DependsOn(dim, filteredDimSetVar) => s"$dim --> $filteredDimSetVar"
-    case InducedBy(induced, inducers) => s"$induced <== ${inducers.mkString(", ")}"
+    case InducedBy(induced, inducers) => s"$induced ⊇ ${inducers.mkString(", ")}"
 
   def map(mapping: Map[DimSetVar, DimSetVar]): Constraint = this match
     case In(dim, dimSetVar) => In(dim, mapping(dimSetVar))
