@@ -11,12 +11,14 @@ import scala.reflect.ClassTag
 type Typing = mutable.Map[BlockSchema, BlockTy]
 
 def inferTypes(schema: BlockSchema, typing: Typing): BlockTy =
+  println(s"Inferring type of $schema")
   if typing.contains(schema) then
     return typing(schema)
 
   for usedBlock <- schema.blocks do
     if !typing.contains(usedBlock.schema) then
-      typing += usedBlock.schema -> inferTypes(schema, typing)
+      println(s"Recursing into $usedBlock")
+      typing += usedBlock.schema -> inferTypes(usedBlock.schema, typing)
 
   val coalescence = coalesceConnectedVertices(schema)
   val constraints = schema
@@ -35,6 +37,11 @@ def inferTypes(schema: BlockSchema, typing: Typing): BlockTy =
   val ins = inferIns(getConstraints[In](constraints), inductions.values.toSet)
   val notIns = inferNotIns(getConstraints[NotIn](constraints), inductions)
   val inUnions = inferInUnions(getConstraints[InUnion](constraints), inductions, notIns)
+
+  inUnions.foreach { inUnion =>
+    if inUnion.union.isEmpty then
+      throw IllegalStateException(s"SUS: $inUnion")
+  }
 
   println("Ins:")
   ins.foreach(println)
@@ -60,6 +67,7 @@ def inferTypes(schema: BlockSchema, typing: Typing): BlockTy =
   val relevantInUnions =
     inUnions
       .map[InUnion](inUnion => InUnion(inUnion.dim, inUnion.union.filter(d => unCoalescence.contains(d))))
+      .filter(_.union.nonEmpty)
 
   val allConstraints = relevantInductions ++ relevantIns ++ relevantNotIns ++ relevantInUnions
 
@@ -68,12 +76,7 @@ def inferTypes(schema: BlockSchema, typing: Typing): BlockTy =
   println("Final constraints")
   finalConstraints.foreach(println)
 
-  relevantInUnions.foreach { inUnion =>
-    if inUnion.union.isEmpty then
-      println(s"SUS: $inUnion")
-  }
-
-  BlockTy(Set())
+  BlockTy(finalConstraints.toSet)
 
 def inferIns(ins: Set[In], inductions: Set[InducedBy]): Set[In] =
   ins ++ propagateInsDown(ins, inductions)
@@ -119,7 +122,7 @@ def propagateInUnionsUp(inUnions: Set[InUnion], inductions: Map[DimSetVar, Induc
               .filter(inducer => !inducer.filteredDimensions.contains(inUnion.dim))
               .map(_.dimSetVar)
         )
-        .filter(dimSetVar => !notIns.contains(NotIn(inUnion.dim, dimSetVar)))
+        .filter(dimSetVar => !notIns.contains(inUnion.dim notIn dimSetVar))
     )
   )
     .map[InUnion]((dim, union) => InUnion(dim, union))
