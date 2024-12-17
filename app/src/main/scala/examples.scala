@@ -86,6 +86,7 @@ def parallelDimensionRemovalExample =
 
   inferTypes(schema, typing)
 
+@main
 def susExample =
   val dim_a = Dim("a")
   val (add_dim_a_schema, add_dim_a_ty) = addDimSchema(dim_a)
