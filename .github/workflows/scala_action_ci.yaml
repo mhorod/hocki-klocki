@@ -1,10 +1,10 @@
-name: CI
+name: Scala Action CI
 on: push
 jobs:
   test:
     defaults:
       run:
-        working-directory: app
+        working-directory: ./app
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
@@ -13,7 +13,7 @@ jobs:
       uses: actions/setup-java@v3
       with:
         distribution: temurin
-        java-version: 8
+        java-version: 17
     - name: Build and Test
       run: sbt -v +test
     - name: Archive reports
