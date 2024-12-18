@@ -11,50 +11,65 @@ def DimSetVar : Type := String deriving BEq, Hashable, Repr
 
 -- (a ∈ f(X) → a ∈ f(Y)) ∧ (a ∈ f(Y) → a ∈ U f(R_a^{-1}(Y))) → f wf R_a
 
-abbrev DimSetVarRel : Type := Set (DimSetVar × DimSetVar)
+abbrev DimSetVarRel : Type := DimSetVar → DimSetVar → Prop
 
-inductive WellFormed (a : Dim) (R : DimSetVarRel) (f : DimSetVar → Set Dim) : Prop where
-| wellFormed : (∀ {X Y}, (X, Y) ∈ R → a ∈ f X → a ∈ f Y) → WellFormed a R f
+def wf (a : Dim) (R : DimSetVarRel) (f : DimSetVar → Set Dim) : Prop := ∀ {X Y}, R X Y → a ∈ f X → a ∈ f Y
 
 theorem empty_relation_well_formed
     {a : Dim}
     (f : DimSetVar → Set Dim)
     :
-    WellFormed a ∅ f
+    wf a EmptyRelation f
   := by
-    have h1 : ∀ {X Y}, (X, Y) ∈ (∅ : DimSetVarRel) → a ∈ f X → a ∈ f Y := by
-      intro x y h2
-      by_contra
-      exact Set.not_mem_empty (x, y) h2
-    exact WellFormed.wellFormed h1
+  intro _ _
+  intro RXY
+  simp at RXY
 
+@[simp]
+def addPair (R : DimSetVarRel) (X Y : DimSetVar) : DimSetVarRel := fun a b => (R a b) ∨ (a = X ∧ b = Y)
+
+-- :thunk: unused
 theorem transitive_step_well_formed
     {a : Dim}
     (f : DimSetVar → Set Dim)
     (R : DimSetVarRel)
-    (wf : WellFormed a R f)
+    (f_wf_R : wf a R f)
     {X Y Z : DimSetVar}
-    (xy_in_R: (X, Y) ∈ R)
-    (yz_in_R: (Y, Z) ∈ R)
+    (XY_in_R: R X Y)
+    (YZ_in_R: R Y Z)
     :
-    WellFormed a (insert (X, Z) R) f
+    wf a (addPair R X Z) f
   := by
-    have R_wf_proof : (∀ {X Y}, (X, Y) ∈ R → a ∈ f X → a ∈ f Y) := match wf with
-      | WellFormed.wellFormed proof => proof
+  unfold wf
+  have XZ_wf : a ∈ f X → a ∈ f Z := by
+    have h_XY := f_wf_R XY_in_R
+    have h_YZ := f_wf_R YZ_in_R
+    intro a_in_fX
+    exact h_YZ (h_XY a_in_fX)
+  intro i j R'ij
+  simp at R'ij
+  match R'ij with
+  | Or.inl Rij => exact f_wf_R Rij
+  | Or.inr ij_eq_XZ =>
+    rw [← ij_eq_XZ.left, ← ij_eq_XZ.right] at XZ_wf
+    exact XZ_wf
 
-    have xz_wf : a ∈ f X → a ∈ f Z := by
-      have h_xy := R_wf_proof xy_in_R
-      have h_yz := R_wf_proof yz_in_R
-      intro a_in_fx
-      exact h_yz (h_xy a_in_fx)
 
-    have h1 : (∀ {x u}, (x, u) ∈ (insert (X, Z) R) → a ∈ f x → a ∈ f u) := by
-      intro x u insert_xz a_in_fx
-      rw [Set.mem_insert_iff] at insert_xz
-      match insert_xz with
-        | Or.inl x_u_eq_X_Z =>
-          simp at x_u_eq_X_Z
-          rw [← x_u_eq_X_Z.left, ← x_u_eq_X_Z.right] at xz_wf
-          exact xz_wf a_in_fx
-        | Or.inr b => exact (R_wf_proof b) a_in_fx
-    exact WellFormed.wellFormed h1
+
+theorem transitive_closure_well_formed
+  {a : Dim}
+  (f : DimSetVar → Set Dim)
+  (R : DimSetVarRel)
+  (f_wf_R : wf a R f)
+  :
+  wf a (Relation.TransGen R) f
+  := by
+    unfold wf
+    unfold wf at f_wf_R
+    intro X Y R'XY
+    induction R'XY with
+    | single h => exact f_wf_R h
+    | tail R'Xb Rbc ih =>
+      intro a_in_fX
+      have a_in_fb := ih a_in_fX
+      exact f_wf_R Rbc a_in_fb
