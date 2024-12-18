@@ -1,7 +1,6 @@
-package hocki.klocki
-package names
+package hocki.klocki.names
 
-import semantics.dims.{Dim, DimSetVar}
+import hocki.klocki.semantics.dims.{Dim, DimSetVar}
 
 class SimpleNameGenerator extends NameGenerator:
   private var dimId = 0

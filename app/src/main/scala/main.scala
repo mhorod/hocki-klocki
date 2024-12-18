@@ -1,5 +1,3 @@
-package hocki.klocki
-
 @main
 def main(): Unit =
   println("--- CHAINED DIMENSION INTRODUCTION EXAMPLE ---")

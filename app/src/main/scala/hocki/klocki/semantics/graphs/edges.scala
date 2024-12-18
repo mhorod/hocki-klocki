@@ -1,6 +1,5 @@
-package hocki.klocki
-package semantics.graphs
+package hocki.klocki.semantics.graphs
 
-import semantics.dims.DimSetVar
+import hocki.klocki.semantics.dims.DimSetVar
 
 type Edge = (DimSetVar, DimSetVar)
