@@ -1,11 +1,10 @@
-package hocki.klocki
-package typing
+package hocki.klocki.typing
+
+import hocki.klocki.semantics.dims.DimSetVar
+import hocki.klocki.semantics.graphs.{BlockSchema, Edge}
+import hocki.klocki.typing.Constraint.{In, InUnion, InducedBy, NotIn}
 
 import scala.collection.mutable
-import semantics.graphs.{BlockSchema, Edge}
-import semantics.dims.DimSetVar
-import typing.Constraint.{In, InUnion, InducedBy, NotIn}
-
 import scala.reflect.ClassTag
 
 type Typing = mutable.Map[BlockSchema, BlockTy]

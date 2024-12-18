@@ -1,7 +1,6 @@
-package hocki.klocki
-package typing
+package hocki.klocki.typing
 
-import semantics.dims.{Dim, DimSetVar}
+import hocki.klocki.semantics.dims.{Dim, DimSetVar}
 
 enum Constraint:
   case In(dim: Dim, dimSetVar: DimSetVar)

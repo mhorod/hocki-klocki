@@ -1,13 +1,13 @@
-package hocki.klocki
+import hocki.klocki.names.{NameGenerator, SimpleNameGenerator}
+import hocki.klocki.semantics.dims.{Dim, DimSetVar}
+import hocki.klocki.semantics.graphs.BlockSchema
+import hocki.klocki.typing.{BlockTy, addDimSchema, inferTypes, removeDimSchema, unionSchema}
 
-import names.{NameGenerator, SimpleNameGenerator}
-import semantics.dims.{Dim, DimSetVar}
-import semantics.graphs.BlockSchema
-import typing.{addDimSchema, inferTypes, removeDimSchema, unionSchema}
+import scala.collection.mutable
 
 given NameGenerator = SimpleNameGenerator()
 
-def chainedDimensionIntroductionsExample =
+def chainedDimensionIntroductionsExample: BlockTy =
   val (add_dim_a_schema, add_dim_a_ty) = addDimSchema(Dim("a"))
   val (add_dim_b_schema, add_dim_b_ty) = addDimSchema(Dim("b"))
   val blockA = add_dim_a_schema.instantiate
@@ -34,7 +34,7 @@ def chainedDimensionIntroductionsExample =
   inferTypes(schema, typing)
 
 
-def parallelDimensionRemovalExample =
+def parallelDimensionRemovalExample: BlockTy =
   val (add_dim_a_schema, add_dim_a_ty) = removeDimSchema(Dim("a"))
   val (add_dim_b_schema, add_dim_b_ty) = removeDimSchema(Dim("b"))
   val (union_schema, union_ty) = unionSchema(2)
@@ -87,7 +87,7 @@ def parallelDimensionRemovalExample =
   inferTypes(schema, typing)
 
 @main
-def susExample =
+def susExample: BlockTy =
   val dim_a = Dim("a")
   val (add_dim_a_schema, add_dim_a_ty) = addDimSchema(dim_a)
   val (remove_dim_a_schema, remove_dim_a_ty) = removeDimSchema(dim_a)
@@ -124,7 +124,7 @@ def susExample =
 
   inferTypes(schema, typing)
 
-def funnySchema =
+def funnySchema: (BlockSchema, mutable.Map[BlockSchema, BlockTy]) =
   val dim_a = Dim("a")
   val dim_b = Dim("b")
 
@@ -165,12 +165,12 @@ def funnySchema =
   (schema, typing)
 
 @main
-def funnySchemaExample =
+def funnySchemaExample: BlockTy =
   val (schema, typing) = funnySchema
   inferTypes(schema, typing)
 
 @main
-def funnySchemaSequential =
+def funnySchemaSequential: BlockTy =
   val (funny_schema, funny_typing) = funnySchema
 
   val funny_block_1 = funny_schema.instantiate
@@ -210,7 +210,7 @@ def funnySchemaSequential =
 
 
 @main
-def funnySchemaExampleParallel =
+def funnySchemaExampleParallel: BlockTy =
   val (funny_schema, funny_typing) = funnySchema
   val (union_schema, union_ty) = unionSchema(4)
 
