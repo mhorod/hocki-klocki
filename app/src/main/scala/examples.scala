@@ -7,6 +7,7 @@ import scala.collection.mutable
 
 given NameGenerator = SimpleNameGenerator()
 
+@main
 def chainedDimensionIntroductionsExample: BlockTy =
   val (add_dim_a_schema, add_dim_a_ty) = addDimSchema(Dim("a"))
   val (add_dim_b_schema, add_dim_b_ty) = addDimSchema(Dim("b"))
@@ -33,7 +34,7 @@ def chainedDimensionIntroductionsExample: BlockTy =
 
   inferTypes(schema, typing)
 
-
+@main
 def parallelDimensionRemovalExample: BlockTy =
   val (add_dim_a_schema, add_dim_a_ty) = removeDimSchema(Dim("a"))
   val (add_dim_b_schema, add_dim_b_ty) = removeDimSchema(Dim("b"))
@@ -258,3 +259,52 @@ def funnySchemaExampleParallel: BlockTy =
 
   funny_typing.put(union_schema, union_ty)
   inferTypes(schema, funny_typing)
+
+@main
+def minimalistExample: BlockTy =
+  val x0 = DimSetVar("X_0")
+  val x1 = DimSetVar("X_1")
+
+  val y = DimSetVar("Y")
+
+  val dim_a = Dim("a")
+
+  val (add_dim_a_schema, add_dim_a_ty) = addDimSchema(dim_a)
+  val add_dim_a_block = add_dim_a_schema.instantiate
+
+  val v0 = add_dim_a_block.freshMapping(add_dim_a_block.schema.inVertices.head)
+  val v1 = add_dim_a_block.freshMapping(add_dim_a_block.schema.outVertices.head)
+
+  val (union_schema, union_ty) = unionSchema(2)
+  val union_block = union_schema.instantiate
+
+  val v2 = union_block.freshMapping(union_block.schema.inVertices.head)
+  val v3 = union_block.freshMapping(union_block.schema.inVertices(1))
+  val v4 = union_block.freshMapping(union_block.schema.outVertices.head)
+
+  val (remove_dim_a_schema, remove_dim_a_ty) = removeDimSchema(dim_a)
+  val remove_dim_a_block = remove_dim_a_schema.instantiate
+
+  val v5 = remove_dim_a_block.freshMapping(remove_dim_a_block.schema.inVertices.head)
+  val v6 = remove_dim_a_block.freshMapping(remove_dim_a_block.schema.outVertices.head)
+
+  val schema = BlockSchema(
+    List(x0, x1),
+    List(y),
+    Set(add_dim_a_block, remove_dim_a_block, union_block),
+    Set(
+      x0 -> v2,
+      x1 -> v0,
+      v1 -> v3,
+      v4 -> v5,
+      v6 -> y,
+    ),
+  )
+
+  val typing = collection.mutable.Map(
+    add_dim_a_schema -> add_dim_a_ty,
+    remove_dim_a_schema -> remove_dim_a_ty,
+    union_schema -> union_ty
+  )
+
+  inferTypes(schema, typing)
