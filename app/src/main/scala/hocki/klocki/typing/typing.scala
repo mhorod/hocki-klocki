@@ -35,7 +35,9 @@ def inferTypes(schema: BlockSchema, typing: Typing): BlockTy =
 
   val ins = inferIns(getConstraints[In](constraints), inductions.values.toSet)
   val notIns = inferNotIns(getConstraints[NotIn](constraints), inductions)
-  val inUnions = inferInUnions(getConstraints[InUnion](constraints), inductions, notIns)
+  val inUnions =
+    pruneUnions(inferInUnions(getConstraints[InUnion](constraints), inductions, notIns), ins)
+
 
   inUnions.foreach { inUnion =>
     if inUnion.union.isEmpty then
@@ -91,8 +93,10 @@ def getConstraints[V <: Constraint](constraints: Set[Constraint])(using classTag
 
 def propagateInsDown(ins: Set[In], inductions: Set[InducedBy]): Set[In] =
   ins ++ ins.flatMap(
+    // a \in X
     in => inductions
-      .filter(_.inducerDimSetVars.contains(in.dimSetVar))
+      // leave inductions Y \supseteq U X \ A where a \notin a
+      .filter(_.inducers.exists(inducer => inducer.dimSetVar == in.dimSetVar && !inducer.filteredDimensions.contains(in.dim)))
       .map[In](i => In(in.dim, i.induced))
   )
 
@@ -125,6 +129,9 @@ def propagateInUnionsUp(inUnions: Set[InUnion], inductions: Map[DimSetVar, Induc
     )
   )
     .map[InUnion]((dim, union) => InUnion(dim, union))
+
+def pruneUnions(inUnions: Set[InUnion], ins: Set[In]): Set[InUnion] =
+  inUnions.filter(inUnion => !inUnion.union.exists(elem => ins.contains(inUnion.dim in elem)))
 
 def inferInductions(constraints: Set[Constraint]): Map[DimSetVar, InducedBy] =
   val inductions = getConstraints[InducedBy](constraints)
