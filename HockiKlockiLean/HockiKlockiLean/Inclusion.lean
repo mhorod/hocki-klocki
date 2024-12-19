@@ -2,14 +2,7 @@ import Mathlib.Data.Prod.Basic
 import Mathlib.Data.Set.Basic
 import Mathlib.Logic.Relation
 
-def Dim : Type := String deriving BEq, Hashable, Repr
-def DimSetVar : Type := String deriving BEq, Hashable, Repr
-
--- R_a
-
--- X R_a Y
-
--- (a ∈ f(X) → a ∈ f(Y)) ∧ (a ∈ f(Y) → a ∈ U f(R_a^{-1}(Y))) → f wf R_a
+import HockiKlockiLean.Model
 
 abbrev DimSetVarRel : Type := DimSetVar → DimSetVar → Prop
 
@@ -53,7 +46,6 @@ theorem transitive_step_well_formed
   | Or.inr ij_eq_XZ =>
     rw [← ij_eq_XZ.left, ← ij_eq_XZ.right] at XZ_wf
     exact XZ_wf
-
 
 
 theorem transitive_closure_well_formed
