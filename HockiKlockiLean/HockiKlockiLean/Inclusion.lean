@@ -4,36 +4,36 @@ import Mathlib.Logic.Relation
 
 import HockiKlockiLean.Model
 
-abbrev DimSetVarRel : Type := DimSetVar → DimSetVar → Prop
 
-def wf (a : Dim) (R : DimSetVarRel) (f : DimSetVar → Set Dim) : Prop := ∀ {X Y}, R X Y → a ∈ f X → a ∈ f Y
+
+def R_wf {a : Dim} (R : DimSetVarRel a) (f : DimSetVar → Set Dim) : Prop := ∀ {X Y}, R X Y → a ∈ f X → a ∈ f Y
 
 theorem empty_relation_well_formed
     {a : Dim}
     (f : DimSetVar → Set Dim)
     :
-    wf a EmptyRelation f
+    @R_wf a EmptyRelation f
   := by
   intro _ _
   intro RXY
   simp at RXY
 
 @[simp]
-def addPair (R : DimSetVarRel) (X Y : DimSetVar) : DimSetVarRel := fun a b => (R a b) ∨ (a = X ∧ b = Y)
+def addPair {a : Dim} (R : DimSetVarRel a) (X Y : DimSetVar) : DimSetVarRel a := fun a b => (R a b) ∨ (a = X ∧ b = Y)
 
 -- :thunk: unused
 theorem transitive_step_well_formed
     {a : Dim}
     (f : DimSetVar → Set Dim)
-    (R : DimSetVarRel)
-    (f_wf_R : wf a R f)
+    (R : DimSetVarRel a)
+    (f_wf_R : R_wf R f)
     {X Y Z : DimSetVar}
     (XY_in_R: R X Y)
     (YZ_in_R: R Y Z)
     :
-    wf a (addPair R X Z) f
+    R_wf (addPair R X Z) f
   := by
-  unfold wf
+  unfold R_wf
   have XZ_wf : a ∈ f X → a ∈ f Z := by
     have h_XY := f_wf_R XY_in_R
     have h_YZ := f_wf_R YZ_in_R
@@ -51,13 +51,13 @@ theorem transitive_step_well_formed
 theorem transitive_closure_well_formed
   {a : Dim}
   (f : DimSetVar → Set Dim)
-  (R : DimSetVarRel)
-  (f_wf_R : wf a R f)
+  (R : DimSetVarRel a)
+  (f_wf_R : R_wf R f)
   :
-  wf a (Relation.TransGen R) f
+  @R_wf a (Relation.TransGen R) f
   := by
-    unfold wf
-    unfold wf at f_wf_R
+    unfold R_wf
+    unfold R_wf at f_wf_R
     intro X Y R'XY
     induction R'XY with
     | single h => exact f_wf_R h
