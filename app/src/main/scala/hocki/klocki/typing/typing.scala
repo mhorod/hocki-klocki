@@ -1,7 +1,7 @@
 package hocki.klocki.typing
 
-import hocki.klocki.semantics.dims.DimSetVar
-import hocki.klocki.semantics.graphs.{BlockSchema, Edge}
+import hocki.klocki.entities.{DimSetVar, Edge}
+import hocki.klocki.semantics.graphs.BlockSchema
 import hocki.klocki.typing.Constraint.{In, InUnion, InducedBy, NotIn}
 
 import scala.collection.mutable

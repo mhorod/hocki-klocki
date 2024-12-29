@@ -1,0 +1,7 @@
+def chained = [X | Y]
+    use +a[In | Out] as AddA
+    use +b[In | Out] as AddB
+    link
+        X >-> AddA.In,
+        AddA.Out >-> AddB.In,
+        AddB.Out >-> Y

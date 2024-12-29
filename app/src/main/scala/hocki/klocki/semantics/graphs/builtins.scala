@@ -1,6 +1,6 @@
 package hocki.klocki.semantics.graphs
 
-import hocki.klocki.semantics.dims.DimSetVar
+import hocki.klocki.entities.DimSetVar
 
 def builtinSchema(inCount: Int, outCount: Int): BlockSchema =
   val inVertices = (0 until inCount).map(i => DimSetVar(s"X$i")).toList

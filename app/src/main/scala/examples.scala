@@ -1,5 +1,5 @@
+import hocki.klocki.entities.{Dim, DimSetVar}
 import hocki.klocki.names.{NameGenerator, SimpleNameGenerator}
-import hocki.klocki.semantics.dims.{Dim, DimSetVar}
 import hocki.klocki.semantics.graphs.BlockSchema
 import hocki.klocki.typing.{BlockTy, addDimSchema, inferTypes, removeDimSchema, unionSchema}
 

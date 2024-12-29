@@ -1,10 +1,9 @@
+import hocki.klocki.pipeline.runPipeline
+
 @main
-def main(): Unit =
-  println("--- CHAINED DIMENSION INTRODUCTION EXAMPLE ---")
-  chainedDimensionIntroductionsExample
-
-  println("--- PARALLEL DIMENSION INTRODUCTION EXAMPLE ---")
-  parallelDimensionRemovalExample
-
-  println("--- SUS EXAMPLE ---")
-  susExample
+def main(filename: String): Unit =
+  try
+    val msg = if runPipeline(filename) then "OK" else "FAIL"
+    println(msg)
+  catch
+    case e: Exception => println("TRAGEDY")

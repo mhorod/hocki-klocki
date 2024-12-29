@@ -1,7 +1,7 @@
 package hocki.klocki.semantics.graphs
 
+import hocki.klocki.entities.DimSetVar
 import hocki.klocki.names.NameGenerator
-import hocki.klocki.semantics.dims.DimSetVar
 
 class BlockSchema(
   val inVertices: List[DimSetVar],
