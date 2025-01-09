@@ -1,12 +1,19 @@
 package hocki.klocki.pipeline
 
+import hocki.klocki.analysis.resolveNames
 import hocki.klocki.ast.Toplevel
 import hocki.klocki.parsing.DflParser
+import hocki.klocki.utils.printTree
 
 import scala.io.Source.fromFile
 
 def runPipeline(filename: String): Boolean =
-  ???
+  load(filename) match
+    case Some(tree) =>
+      printTree(tree)
+      val names = resolveNames(tree)
+      true
+    case None => false
 
 private def load(filename: String): Option[Toplevel] =
   val source = fromFile(filename)

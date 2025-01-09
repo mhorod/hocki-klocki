@@ -1,0 +1,4 @@
+def shadowing = [X | Z]
+    use +a[Y, Y | Y]
+    link
+        Y >-> Z

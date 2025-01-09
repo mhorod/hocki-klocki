@@ -1,20 +1,6 @@
 package hocki.klocki.parsing
 
-import hocki.klocki.ast.{
-  Abstra,
-  BlockId,
-  BuiltinSchema,
-  ConnectionDecl,
-  IfaceDef,
-  Link,
-  Toplevel,
-  SchemaExpr,
-  SchemaId,
-  Statement,
-  VertexDef,
-  VertexId,
-  VertexRef,
-}
+import hocki.klocki.ast.{Abstra, BlockId, BuiltinSchema, ConnectionDecl, IfaceBinding, Link, SchemaBinding, SchemaExpr, SchemaId, Statement, Toplevel, VertexBinding, VertexId, VertexRef, VertexUse}
 import hocki.klocki.entities.Dim
 
 import scala.util.parsing.combinator.RegexParsers
@@ -36,21 +22,29 @@ object DflParser extends RegexParsers:
     }
 
   private def blockUse: Parser[Statement.BlockUse] =
-    ("use" ~> schemaExpr) ~ ifaceDef ~ opt("as" ~> blockId) ^^ {
+    ("use" ~> schemaExpr) ~ externalIfaceBinding ~ opt("as" ~> blockId) ^^ {
       case expr ~ ifaceDef ~ blockId => Statement.BlockUse(expr, ifaceDef, blockId)
     }
 
   // Iface
 
-  private def ifaceDef: Parser[IfaceDef] = bracketed(vertexDefList ~ ("|" ~> vertexDefList)) ^^ {
-    case in ~ out => IfaceDef(in, out)
+  private def internalIfaceBinding: Parser[IfaceBinding.Internal] = bracketed(supplierList ~ ("|" ~> consumerList)) ^^ {
+    case suppliers ~ consumers => IfaceBinding.Internal(suppliers, consumers)
   }
 
-  private def vertexDefList: Parser[List[VertexDef]] = repsep(vertexDef, ",")
-
-  private def vertexDef: Parser[VertexDef] = vertexId ^^ {
-    VertexDef(_)
+  private def externalIfaceBinding: Parser[IfaceBinding.External] = bracketed(consumerList ~ ("|" ~> supplierList)) ^^ {
+    case consumers ~ suppliers => IfaceBinding.External(consumers, suppliers)
   }
+
+  private def supplierList: Parser[List[VertexBinding.Supplier]] = vertexBindingList(supplierBinding)
+
+  private def consumerList: Parser[List[VertexBinding.Consumer]] = vertexBindingList(consumerBinding)
+
+  private def vertexBindingList[T <: VertexBinding](single: Parser[T]): Parser[List[T]] = repsep(single, ",")
+
+  private def supplierBinding: Parser[VertexBinding.Supplier] = vertexId ^^ { VertexBinding.Supplier(_) }
+
+  private def consumerBinding: Parser[VertexBinding.Consumer] = vertexId ^^ { VertexBinding.Consumer(_) }
 
   // SchemaExpr
 
@@ -88,13 +82,15 @@ object DflParser extends RegexParsers:
 
   private def abstra: Parser[Abstra] = onIface | onSchema
 
-  private def onIface: Parser[Abstra.OnIface] = ifaceDef ~ rep(statement) ~ link ^^ {
+  private def onIface: Parser[Abstra.OnIface] = internalIfaceBinding ~ rep(statement) ~ link ^^ {
     case iface ~ body ~ link => Abstra.OnIface(iface, body, link)
   }
 
-  private def onSchema: Parser[Abstra.OnSchema] = (("\\" | "λ") ~> schemaId <~ ".") ~ abstra ^^ {
+  private def onSchema: Parser[Abstra.OnSchema] = schemaBinding ~ abstra ^^ {
     case schemaBinding ~ abstra => Abstra.OnSchema(schemaBinding, abstra)
   }
+  
+  private def schemaBinding: Parser[SchemaBinding] = ("λ" | "\\") ~> schemaId <~ "." ^^ { SchemaBinding(_) }
 
   // Links
 
@@ -102,9 +98,13 @@ object DflParser extends RegexParsers:
     Link(_)
   }
 
-  private def connectionDecl: Parser[ConnectionDecl] = vertexRef ~ (">->" ~> vertexRef) ^^ {
+  private def connectionDecl: Parser[ConnectionDecl] = supplierUse ~ (">->" ~> consumerUse) ^^ {
     case u ~ v => ConnectionDecl(u, v)
   }
+
+  private def supplierUse: Parser[VertexUse.Supplier] = vertexRef ^^ { VertexUse.Supplier(_) }
+
+  private def consumerUse: Parser[VertexUse.Consumer] = vertexRef ^^ { VertexUse.Consumer(_) }
 
   private def vertexRef: Parser[VertexRef] = scoped | plain
 

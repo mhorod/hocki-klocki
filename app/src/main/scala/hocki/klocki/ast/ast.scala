@@ -1,84 +1,58 @@
 package hocki.klocki.ast
 
-import hocki.klocki.utils.Tree
+import hocki.klocki.utils.{Tree, toParenthesesString}
 
-sealed trait AstNode extends Tree
+sealed trait AstNode extends Tree:
+  override def children: List[AstNode]
 
-class Toplevel(statements: List[Statement], link: Option[Link]) extends AstNode:
-  override def children: List[Tree] = statements ++ link
+class Toplevel(val statements: List[Statement], val link: Option[Link]) extends AstNode:
+  override def children: List[AstNode] = statements ++ link
 
   override def toString: String = "toplevel"
-
-class VertexDef(val id: VertexId) extends AstNode:
-  override def children: List[Tree] = List()
-
-  override def toString: String = s"vertex $id"
-
-class IfaceDef(in: List[VertexDef], out: List[VertexDef]) extends AstNode:
-  override def children: List[Tree] = in ++ out
-
-  override def toString: String =
-    val inIds = in.map(_.id).mkString(", ")
-    val outIds = out.map(_.id).mkString(", ")
-    s"[$inIds | $outIds]"
 
 sealed trait Abstra extends AstNode
 
 object Abstra:
-  class OnIface(iface: IfaceDef, body: List[Statement], link: Link) extends Abstra:
-    override def children: List[Tree] = body :+ link
+  class OnIface(val iface: IfaceBinding.Internal, val body: List[Statement], val link: Link) extends Abstra:
+    override def children: List[AstNode] = body :+ link
 
     override def toString: String = iface.toString
 
-  class OnSchema(schemaId: SchemaId, impl: Abstra) extends Abstra:
-    override def children: List[Tree] = List(impl)
+  class OnSchema(val binding: SchemaBinding, val impl: Abstra) extends Abstra:
+    override def children: List[Abstra] = List(impl)
 
-    override def toString: String = s"λ $schemaId"
+    override def toString: String = binding.toString
 
 sealed trait Statement extends AstNode
 
 object Statement:
-  class SchemaDef(id: SchemaId, impl: Abstra) extends Statement:
-    override def children: List[Tree] = List(impl)
+  class SchemaDef(val id: SchemaId, val impl: Abstra) extends Statement:
+    override def children: List[Abstra] = List(impl)
 
     override def toString: String = s"def $id ="
 
-  class BlockUse(expr: SchemaExpr, iface: IfaceDef, name: Option[BlockId]) extends Statement:
-    override def children: List[Tree] = List(expr, iface)
+  class BlockUse(val expr: SchemaExpr, val iface: IfaceBinding.External, val name: Option[BlockId]) extends Statement:
+    override def children: List[Nothing] = List()
 
-    override def toString: String = "use"
+    override def toString: String = s"use ${expr.toParenthesesString} $iface"
 
-sealed trait VertexRef extends AstNode:
-  override def children: List[Tree] = List()
+sealed abstract class VertexUse(val ref: VertexRef) extends AstNode:
+  override def children: List[Nothing] = List()
 
-object VertexRef:
-  class Plain(vertexId: VertexId) extends VertexRef:
-    override def toString: String = vertexId.toString
+  override def toString: String = ref.toString
 
-  class Scoped(blockId: BlockId, vertexId: VertexId) extends VertexRef:
-    override def toString: String = s"$blockId.$vertexId"
+object VertexUse:
+  class Supplier(ref: VertexRef) extends VertexUse(ref)
 
-class ConnectionDecl(from: VertexRef, to: VertexRef) extends AstNode:
-  override def children: List[Tree] = List(from, to)
+  class Consumer(ref: VertexRef) extends VertexUse(ref)
 
-  override def toString: String = s"$from >-> $to"
+class ConnectionDecl(val from: VertexUse, val to: VertexUse) extends AstNode:
+  override def children: List[VertexUse] = List(from, to)
 
-class Link(connections: List[ConnectionDecl]) extends AstNode:
-  override def children: List[Tree] = connections
+  override def toString: String = ">->"
+
+class Link(val connections: List[ConnectionDecl]) extends AstNode:
+  override def children: List[ConnectionDecl] = connections
 
   override def toString: String = "link"
 
-sealed trait SchemaExpr extends AstNode:
-  override def children: List[Tree] = List()
-
-object SchemaExpr:
-  class Primitive(builtin: BuiltinSchema) extends SchemaExpr:
-    override def toString: String = builtin.toString
-
-  class SchemaRef(schemaId: SchemaId) extends SchemaExpr:
-    override def toString: String = schemaId.toString
-
-  class App(left: SchemaExpr, right: SchemaExpr) extends SchemaExpr:
-    override def children: List[Tree] = List(left, right)
-
-    override def toString: String = "app"
