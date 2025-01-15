@@ -1,0 +1,106 @@
+\NeedsTeXFormat{LaTeX2e}
+
+\RequirePackage{hyperref}
+\RequirePackage{nameref}
+
+\RequirePackage{amsmath}
+\RequirePackage{amssymb}
+\RequirePackage{amsthm}
+\RequirePackage{mathpartir}
+\RequirePackage{mathtools}
+\RequirePackage{proof}
+
+\RequirePackage{float}
+
+
+%% --- styles --- %%%
+
+\newcommand{\plainStyle}[1]{#1}
+
+%% ------ %%
+
+
+%% --- auto-scaling delimiters --- %%
+
+% parentheses ()
+\DeclarePairedDelimiter{\parenthesesDelimiter}{(}{)}
+\def\pars{\parenthesesDelimiter*}
+
+% braces {}
+\DeclarePairedDelimiter{\bracesDelimiter}{\{}{\}}
+\def\braces{\bracesDelimiter*}
+
+% brackets []
+\DeclarePairedDelimiter{\bracketsDelimiter}{[}{]}
+\def\brackets{\bracketsDelimiter*}
+
+% angle brackets <>
+\DeclarePairedDelimiter{\anglebracketsDelimiter}{<}{>}
+\def\anglebrackets{\anglebracketsDelimiter*}
+
+%% ------ %%
+
+
+%% --- standard math notation --- %%
+
+\let\set\braces % {1, 2, 3}
+\let\range\brackets % [n]
+
+\let\seq\overline % syntactic sequence
+\newcommand{\seqI}[2]{\seq{#1}^{\,#2}} % syntactic sequence with index
+
+\DeclareMathOperator{\dom}{dom} % domain of a function or environment
+
+\renewcommand{\natural}{\mathbb{N}} % natural numbers
+
+\newcommand{\powerset}{\mathcal{P}}
+
+\let\union\bigcup
+\let\function\rightarrow
+
+%% ------ %%
+
+
+%% --- Hocki-Klock specific --- %%
+
+% dims
+\def\dimSymbol{\delta} % standard symbol
+\let\dimStyle\plainStyle % style
+\newcommand{\dimension}[1][\dimSymbol]{\dimStyle{#1}} % plain
+\newcommand{\dimensionI}[2][\dimSymbol]{\dimStyle{{#1}_{#2}}} % with index
+\newcommand{\dimensionP}[1][\dimSymbol]{\dimStyle{{#1}'}} % with prime
+\newcommand{\dimensionIP}[2][\dimSymbol]{\dimStyle{{#1}_{#2}'}} % with index and prime
+
+% dim sets
+\def\dimSetSymbol{\Delta} % standard symbol
+\let\dimSetStyle\plainStyle % style
+\newcommand{\dimSet}[1][\dimSetSymbol]{\dimSetStyle{#1}} % plain
+\newcommand{\dimSetI}[2][\dimSetSymbol]{\dimSetStyle{{#1}_{#2}}} % with index
+\newcommand{\dimSetP}[1][\dimSetSymbol]{\dimSetStyle{{#1}'}} % with prime
+\newcommand{\dimSetIP}[2][\dimSetSymbol]{\dimSetStyle{{#1}_{#2}'}} % with index and prime
+
+% dim set vars
+\def\dimSetVarInSymbol{X} % standard symbol
+\def\dimSetVarOutSymbol{Y} % alternative symbol
+\let\dimSetVarStyle\plainStyle % style
+\newcommand{\dimSetVarIn}[1][\dimSetVarInSymbol]{\dimSetVarStyle{#1}} % plain
+\newcommand{\dimSetVarInI}[2][\dimSetVarInSymbol]{\dimSetVarStyle{{#1}_{#2}}} % with index
+\newcommand{\dimSetVarInP}[1][\dimSetVarInSymbol]{\dimSetVarStyle{{#1}'}} % with prime
+\newcommand{\dimSetVarInIP}[2][\dimSetVarInSymbol]{\dimSetVarStyle{{#1}_{#2}'}} % with index and prime
+\newcommand{\dimSetVarOut}[1][\dimSetVarOutSymbol]{\dimSetVarStyle{#1}} % alternative, plain
+\newcommand{\dimSetVarOutI}[2][\dimSetVarOutSymbol]{\dimSetVarStyle{{#1}_{#2}}} % alternative, with index
+\newcommand{\dimSetVarOutP}[1][\dimSetVarOutSymbol]{\dimSetVarStyle{{#1}'}} % alternative, with prime
+\newcommand{\dimSetVarOutIP}[2][\dimSetVarOutSymbol]{\dimSetVarStyle{{#1}_{#2}'}} % alternative, with index and prime
+
+% schemata
+\def\schemaSymbol{s} % standard symbol
+\let\schemaStyle\plainStyle % style
+\newcommand{\schema}[1][\schemaSymbol]{\schemaStyle{#1}} % plain
+\newcommand{\schemaI}[2][\schemaSymbol]{\schemaStyle{{#1}_{#2}}} % with index
+\newcommand{\schemaP}[1][\schemaSymbol]{\schemaStyle{{#1}'}} % with prime
+\newcommand{\schemaIP}[2][\schemaSymbol]{\schemaStyle{{#1}_{#2}'}} % with index and prime
+
+% symbols
+\let\inducedBy\supseteq
+
+%% ------ %%

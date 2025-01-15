@@ -1,0 +1,144 @@
+\documentclass{article}
+
+\usepackage[utf8]{inputenc}
+
+\usepackage[margin=0.8in]{geometry}
+\usepackage{parskip}
+\usepackage[english]{babel}
+
+\usepackage{../styles/hocki-klocki}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\theoremstyle{definition}
+\newtheorem{notation}{Notation}[section]
+\theoremstyle{definition}
+\newtheorem{theorem}{Theorem}[section]
+\theoremstyle{definition}
+\newtheorem{remark}{Remark}[section]
+\theoremstyle{definition}
+\newtheorem{corollary}{Corollary}[section]
+
+\title{Hocki Klocki}
+\author{Michał Horodecki \\ Jakub Oskwarek}
+\date{January 2025}
+
+\begin{document}
+
+\maketitle
+
+\section{Smol Bebi Version}
+
+The most basic version without even dependent dimensions.
+
+\subsection{Constraints}
+
+In the most basic we have the following constraints:
+\begin{itemize}
+    \item \( \dimension \in \dimSetVarIn \) -- dimension \( \dimension \) has to be in dim set assigned to \( \dimSetVarIn \)
+    \item \( \dimension \notin \dimSetVarIn \) -- dimension \( \dimension \) cannot be in dim set assigned to \( \dimSetVarIn \)
+    \item \( \dimension \in \union_{i \in I} \dimSetVarInI{i} \) -- dimension \( \dimension \) has to be in union of dim sets assigned to all \( \dimSetVarInI{i} \)
+    \item \( \dimSetVarOut \inducedBy \union_{i \in I} \dimSetVarInI{i} \setminus \dimSet \)
+    \item \( \dimSetVarIn = \dimSetVarOut \) -- dim sets assigned to \( \dimSetVarIn \) and \( \dimSetVarOut \) have to be equal
+\end{itemize}
+
+\subsection{Primitive blocks}
+
+We introduce three primitive block schemas that introduce the above constraints:
+\begin{enumerate}
+    \item Introduction of dimension \( \dimension \),  with the following constraints:
+        \begin{itemize}
+            \item \( \dimSetVarOut \supseteq \dimSetVarIn \setminus \set{\dimension} \)
+            \item \( \dimension \notin \dimSetVarIn \)
+            \item \( \dimension \in \dimSetVarOut \)
+        \end{itemize}
+    \item Removal of dimension \( a \),  with the following constraints:
+        \begin{itemize}
+            \item \( Y \supseteq X \setminus \set{a} \)
+            \item \( a \in X \)
+            \item \( a \notin Y \)
+        \end{itemize}
+    \item Union of dimensions
+        \begin{itemize}
+            \item \( Y \supseteq \bigcup_{i \in I} X_i \)
+        \end{itemize}
+\end{enumerate}
+
+\subsection{Semantics}
+\begin{notation}
+    The notation ``\(\pm\set{\delta\ldots}\) block'' is shorthand for ``any \(\pm\Delta\) block such that \(\delta \in \Delta\)''.
+\end{notation}
+
+\begin{definition}
+    An expanded program is a block constructed by recursively expanding nested blocks down to primitive blocks.
+\end{definition}
+
+\begin{definition}
+    In an expanded program, a \(\delta\)-propagating path is a~path from a~\(+\set{\delta\ldots}\) block and without a~\(-\set{\delta\ldots}\) block.
+\end{definition}
+
+\begin{definition}
+    Let \(\mathcal{V}\) be the vertices of an expanded program \(P\). A function \(f : \mathcal{V} \function \powerset\pars{\mathcal{D}}\) is called \(P\)-valid if both of the following conditions are met:
+    \begin{enumerate}
+        \item every primitive block has its inherent constraints satisfied
+        \item for every \(X \in \mathcal{V}\) and \(\delta \in \mathcal{D}\) such that \(\delta \in f\pars{X}\) there exists a \(\delta\)-propagating path ending on \( X \).
+    \end{enumerate}
+\end{definition}
+
+\begin{remark}
+    The definition above allows for stubbing program inputs by insertion of a \(0\)-ary union (whose output is necessarily an empty set of dimensions) followed by a~\(+\Delta\) block, where \(\Delta\) is the desired input set of dimensions.
+\end{remark}\subsection{Type Reconstruction Algorithm}
+
+Given a schema \( s \) that consists of blocks \( s_1, \dots, s_n \), to type \( s \):
+\begin{enumerate}
+    \item Recursively find types of schemata \( s_1, \dots, s_n \).
+    \item For every dimension \( a \) occurring in the constraints of \( s_1, \dots, s_n \) define relation \( X \Rightarrow_a Y \) iff exists a constraint \( Y \supseteq \bigcup_{i \in I} X_i \setminus A_i \) where \( X = X_j \) and \( a \notin A_j \) for some \( j \).
+    \item Compute transitive and reflective closure of all relations \( \Rightarrow_a \)
+    \item Propagate constraints \( a \in X \) down, i.e.:
+    \[
+        \infer{a \in Y}{a \in X & X \Rightarrow_a Y}
+    \]
+    
+    \item Propagate constraints \( a \notin Y \) up, i.e.:
+    \[
+        \infer{a \notin X}{a \notin Y & X \Rightarrow_a Y}
+    \]
+    
+    \item Propagate constraints \( a \in \bigcup_{i \in I} X_i \) up, i.e.:
+    \[
+        \infer{a \in \pars{Y_j \cup \bigcup_{i \in I} X_i}}{a \in \bigcup_{i \in I} X_i & X_j \Rightarrow_a Y_j}    
+    \]
+    
+    \item Narrow the constraints down to those regarding interface vertices of \( s \).
+\end{enumerate}
+
+
+\subsection{Proof of correctness}
+
+\begin{theorem}[Soundness]
+    Let \( C_T(s) \) be the set of constraints returned by the above algorithm. Then any \(C_T\pars{s}\)-consistent function \( f : I(s) \rightarrow \mathcal{P}(\mathcal{D}) \) can be extended to an \(s\)-valid function \( \widehat f : V(s) \rightarrow \mathcal{P}(\mathcal{D}) \).
+\end{theorem}
+\begin{proof}
+by sorry
+\end{proof}
+
+\begin{theorem}[Completeness]
+    Every \(s\)-valid \(f\) is \(C_T\pars{s}\)-consistent.
+\end{theorem}
+\begin{proof}
+TBA?
+\end{proof}
+
+\begin{corollary}
+    The least \(C_T\pars{s}\)-consistent \(f\) can be extended to the least \(s\)-valid \(\widehat{f}\).
+\end{corollary}
+\begin{proof}
+    Let \( \widehat{f} \) be the least \(s\)-valid function. It is \(C_T\pars{s}\)-consistent by completeness. Let \( f = \widehat{f}_{\mid I(s)} \). We will show that it is the least \(C_T\pars{s}\)-consistent function.
+    
+    Let \( g \) be \(C_T(s) \)-consistent, and let \( \widehat{g} \) be the extension achieved by soundness.
+    
+    We have \( \widehat{f} \leq \widehat{g} \), therefore \( f = \widehat{f}_{\mid I(s)} \leq \widehat{g}_{\mid I(s)} = g \)
+    
+\end{proof}
+
+\end{document}
