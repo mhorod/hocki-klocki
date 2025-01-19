@@ -1,0 +1,9 @@
+def lol = [X | Y]
+    link X >-> Y
+def bruh = [X | Y]
+    def lol = [X | Y] link
+    use lol[A | B]
+    def monkas = [V | W]
+        link V >-> A, B >-> W
+    use monkas[M | N]
+    link

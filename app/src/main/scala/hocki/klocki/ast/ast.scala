@@ -26,10 +26,10 @@ object Abstra:
 sealed trait Statement extends AstNode
 
 object Statement:
-  class SchemaDef(val id: SchemaId, val impl: Abstra) extends Statement:
+  class SchemaDef(val binding: SchemaBinding, val impl: Abstra) extends Statement:
     override def children: List[Abstra] = List(impl)
 
-    override def toString: String = s"def $id ="
+    override def toString: String = s"def ${binding} ="
 
   class BlockUse(val expr: SchemaExpr, val iface: IfaceBinding.External, val name: Option[BlockId]) extends Statement:
     override def children: List[Nothing] = List()

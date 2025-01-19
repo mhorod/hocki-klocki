@@ -18,7 +18,7 @@ object DflParser extends RegexParsers:
 
   private def schemaDef: Parser[Statement.SchemaDef] =
     ("def" ~> schemaId) ~ ("=" ~> abstra) ^^ {
-      case schemaId ~ abstra => Statement.SchemaDef(schemaId, abstra)
+      case schemaId ~ abstra => Statement.SchemaDef(SchemaBinding(schemaId), abstra)
     }
 
   private def blockUse: Parser[Statement.BlockUse] =

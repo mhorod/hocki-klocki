@@ -12,6 +12,8 @@ def runPipeline(filename: String): Boolean =
     case Some(tree) =>
       printTree(tree)
       val names = resolveNames(tree)
+      println(names.vertexNames)
+      println(names.schemaNames)
       true
     case None => false
 

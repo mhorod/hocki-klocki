@@ -9,7 +9,7 @@ object SchemaExpr:
   class Primitive(builtin: BuiltinSchema) extends SchemaExpr:
     override def toString: String = builtin.toString
 
-  class SchemaRef(schemaId: SchemaId) extends SchemaExpr:
+  class SchemaRef(val schemaId: SchemaId) extends SchemaExpr:
     override def toString: String = schemaId.toString
 
   class App(left: SchemaExpr, right: SchemaExpr) extends SchemaExpr:
