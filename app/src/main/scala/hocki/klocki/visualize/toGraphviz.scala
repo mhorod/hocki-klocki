@@ -31,9 +31,14 @@ def unexpandedToGraphviz(schema: BlockSchema, byId: Map[BlockSchemaId, BlockSche
           |    }""".stripMargin
   ).mkString("\n")
 
+  val inVertices = schema.inVertices
+  val outVertices = schema.outVertices
+  val vertices = (inVertices ++ outVertices).map(_.name).mkString(";")
+
   val edges = schema.edges.map((from, to) => s"$from -> $to").mkString(";")
   s"""|  subgraph cluster_${schema.id.hashCode()} {
       |    label="${schema.name}"
+      |    $vertices
       |    $blocks
       |    $edges
-      |  }""".stripMargin
+      |      |  }""".stripMargin

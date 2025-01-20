@@ -50,7 +50,6 @@ def buildGraph(ast: Toplevel, nr: ResolvedNames): List[BlockSchema] =
   val schemata =
     schemaDefs.map(schemaDef => buildSchema(schemaDef, nr, schemataInfo)) ++ builtinSchemata.values
 
-  schemata.foreach(schema => println(schemaToString(schema)))
   schemata
 
 def createInterface(schemaDef: SchemaDef)(using nameGenerator: NameGenerator): SchemaInterface =

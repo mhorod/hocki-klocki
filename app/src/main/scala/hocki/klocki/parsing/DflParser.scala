@@ -139,7 +139,7 @@ object DflParser extends RegexParsers:
     }
 
   private def naturalNumber: Parser[Int] =
-    """[1-9][0-9]*""".r ^^ {
+    """[0-9]+""".r ^^ {
       _.toInt
     }
 

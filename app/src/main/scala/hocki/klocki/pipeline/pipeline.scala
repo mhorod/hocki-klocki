@@ -7,15 +7,19 @@ import hocki.klocki.semantics.graphs.buildGraph
 import hocki.klocki.utils.printTree
 import hocki.klocki.visualize.unexpandedToGraphviz
 
+import java.io.{BufferedWriter, FileWriter}
 import scala.io.Source.fromFile
 
-def runPipeline(filename: String): Boolean =
+def runPipeline(filename: String, outputFilename: String): Boolean =
   load(filename) match
     case Some(tree) =>
       printTree(tree)
       val names = resolveNames(tree)
       val graph = buildGraph(tree, names)
-      println(unexpandedToGraphviz(graph))
+      val graphviz = unexpandedToGraphviz(graph)
+      val writer = BufferedWriter(new FileWriter(outputFilename))
+      writer.write(graphviz)
+      writer.close()
       true
     case None => false
 
