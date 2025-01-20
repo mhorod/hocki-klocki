@@ -123,6 +123,7 @@ def buildSchema
 
   BlockSchema(
     schemaId,
+    schemaDef.binding.id.name,
     schemataInfo.interfaces(schemaId).inVertices,
     schemataInfo.interfaces(schemaId).outVertices,
     blocks,

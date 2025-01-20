@@ -5,6 +5,7 @@ import hocki.klocki.ast.Toplevel
 import hocki.klocki.parsing.DflParser
 import hocki.klocki.semantics.graphs.buildGraph
 import hocki.klocki.utils.printTree
+import hocki.klocki.visualize.unexpandedToGraphviz
 
 import scala.io.Source.fromFile
 
@@ -14,6 +15,7 @@ def runPipeline(filename: String): Boolean =
       printTree(tree)
       val names = resolveNames(tree)
       val graph = buildGraph(tree, names)
+      println(unexpandedToGraphviz(graph))
       true
     case None => false
 

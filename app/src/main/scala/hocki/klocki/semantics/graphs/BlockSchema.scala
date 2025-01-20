@@ -8,6 +8,7 @@ class BlockSchemaId
 class BlockSchema
 (
   val id: BlockSchemaId,
+  val name: String,
   val inVertices: List[DimSetVar],
   val outVertices: List[DimSetVar],
   val blocks: Set[Block],
@@ -24,4 +25,4 @@ def schemaToString(schema: BlockSchema): String =
   val outVertices = schema.outVertices.map(_.name).mkString(", ")
   val blocks = if schema.blocks.isEmpty then "" else "\n  " + schema.blocks.map(blockToString).mkString("\n  ") + "\n"
   val edges = schema.edges.map((from, to) => s"$from -> $to").mkString(", ")
-  s"BlockSchema(${schema.id}, [$inVertices | $outVertices] $blocks link $edges)"
+  s"BlockSchema(${schema.id}, ${schema.name}, [$inVertices | $outVertices] $blocks link $edges)"

@@ -29,6 +29,7 @@ def chainedDimensionIntroductionsExample: BlockTy =
 
   val schema = BlockSchema(
     BlockSchemaId(),
+    "chained +d",
     List(v0),
     List(v5),
     Set(blockA, blockB),
@@ -75,6 +76,7 @@ def parallelDimensionRemovalExample: BlockTy =
 
   val schema = BlockSchema(
     BlockSchemaId(),
+    "parallel -d",
     List(x0, x1),
     List(y),
     Set(unionBlock1, unionBlock2, blockA, blockB),
@@ -120,6 +122,7 @@ def susExample: BlockTy =
 
   val schema = BlockSchema(
     BlockSchemaId(),
+    "sus",
     List(x),
     List(y0, y1),
     Set(add_dim_a_block, remove_dim_a_block),
@@ -163,6 +166,7 @@ def funnySchema: (BlockSchema, mutable.Map[BlockSchemaId, BlockTy], Map[BlockSch
 
   val schema = BlockSchema(
     BlockSchemaId(),
+    "funny",
     List(x0, x1),
     List(y0, y1),
     Set(add_dim_a_block, remove_dim_b_block),
@@ -213,6 +217,7 @@ def funnySchemaSequential: BlockTy =
 
   val schema = BlockSchema(
     BlockSchemaId(),
+    "funny seq",
     List(x0, x1),
     List(y0, y1),
     Set(funny_block_1, funny_block_2),
@@ -263,6 +268,7 @@ def funnySchemaExampleParallel: BlockTy =
 
   val schema = BlockSchema(
     BlockSchemaId(),
+    "funny parallel",
     List(x0, x1),
     List(y),
     Set(funny_block_1, funny_block_2, union_block),
@@ -316,6 +322,7 @@ def minimalistExample: BlockTy =
 
   val schema = BlockSchema(
     BlockSchemaId(),
+    "minimalist",
     List(x0, x1),
     List(y),
     Set(add_dim_a_block, remove_dim_a_block, union_block),
