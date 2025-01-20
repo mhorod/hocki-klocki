@@ -6,3 +6,4 @@ trait NameGenerator:
   def freshDim(): Dim
   def freshInDimSetVar(): DimSetVar
   def freshOutDimSetVar(): DimSetVar
+  def refresh(dimSetVar: DimSetVar): DimSetVar

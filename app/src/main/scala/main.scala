@@ -6,8 +6,11 @@ def main(filename: String): Unit =
     val msg = if runPipeline(filename) then "OK" else "FAIL"
     println(msg)
   catch
-    case e: Exception => println(s"TRAGEDY: $e")
+    case e: Exception => {
+      println(s"TRAGEDY: $e")
+      e.printStackTrace()
+    }
 
 
 @main
-def funnyExample(): Unit = main("examples/nested.dfl")
+def susExampleFromFile(): Unit = main("examples/sus.dfl")

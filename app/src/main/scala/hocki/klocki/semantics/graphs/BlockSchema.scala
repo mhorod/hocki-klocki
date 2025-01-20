@@ -18,3 +18,10 @@ class BlockSchema
       this.id,
       inVertices.map(_ -> gen.freshInDimSetVar()).toMap ++ outVertices.map(_ -> gen.freshOutDimSetVar()).toMap
     )
+
+def schemaToString(schema: BlockSchema): String =
+  val inVertices = schema.inVertices.map(_.name).mkString(", ")
+  val outVertices = schema.outVertices.map(_.name).mkString(", ")
+  val blocks = if schema.blocks.isEmpty then "" else "\n  " + schema.blocks.map(blockToString).mkString("\n  ") + "\n"
+  val edges = schema.edges.map((from, to) => s"$from -> $to").mkString(", ")
+  s"BlockSchema(${schema.id}, [$inVertices | $outVertices] $blocks link $edges)"

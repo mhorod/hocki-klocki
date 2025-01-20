@@ -21,3 +21,12 @@ class SimpleNameGenerator extends NameGenerator:
     val result = DimSetVar(s"Y$outDimSetId")
     outDimSetId += 1
     result
+
+  override def refresh(dimSetVar: DimSetVar): DimSetVar =
+    val name = dimSetVar.name
+    if name.startsWith("X") then
+      freshInDimSetVar()
+    else if name.startsWith("Y") then
+      freshOutDimSetVar()
+    else
+      throw new IllegalArgumentException(s"Unexpected DimSetVar name: $name")
