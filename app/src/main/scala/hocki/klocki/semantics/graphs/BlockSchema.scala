@@ -3,7 +3,11 @@ package hocki.klocki.semantics.graphs
 import hocki.klocki.entities.DimSetVar
 import hocki.klocki.names.NameGenerator
 
-class BlockSchema(
+class BlockSchemaId
+
+class BlockSchema
+(
+  val id: BlockSchemaId,
   val inVertices: List[DimSetVar],
   val outVertices: List[DimSetVar],
   val blocks: Set[Block],
@@ -11,6 +15,6 @@ class BlockSchema(
 ):
   def instantiate(using gen: NameGenerator): Block =
     Block(
-      this,
+      this.id,
       inVertices.map(_ -> gen.freshInDimSetVar()).toMap ++ outVertices.map(_ -> gen.freshOutDimSetVar()).toMap
     )

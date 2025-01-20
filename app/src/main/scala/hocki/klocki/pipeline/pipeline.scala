@@ -3,6 +3,7 @@ package hocki.klocki.pipeline
 import hocki.klocki.analysis.resolveNames
 import hocki.klocki.ast.Toplevel
 import hocki.klocki.parsing.DflParser
+import hocki.klocki.semantics.graphs.buildGraph
 import hocki.klocki.utils.printTree
 
 import scala.io.Source.fromFile
@@ -12,8 +13,7 @@ def runPipeline(filename: String): Boolean =
     case Some(tree) =>
       printTree(tree)
       val names = resolveNames(tree)
-      println(names.vertexNames)
-      println(names.schemaNames)
+      val graph = buildGraph(tree, names)
       true
     case None => false
 

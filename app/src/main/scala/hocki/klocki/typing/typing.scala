@@ -1,28 +1,28 @@
 package hocki.klocki.typing
 
 import hocki.klocki.entities.{DimSetVar, Edge}
-import hocki.klocki.semantics.graphs.BlockSchema
+import hocki.klocki.semantics.graphs.{BlockSchema, BlockSchemaId}
 import hocki.klocki.typing.Constraint.{In, InUnion, InducedBy, NotIn}
 
 import scala.collection.mutable
 import scala.reflect.ClassTag
 
-type Typing = mutable.Map[BlockSchema, BlockTy]
+type Typing = mutable.Map[BlockSchemaId, BlockTy]
 
-def inferTypes(schema: BlockSchema, typing: Typing): BlockTy =
+def inferTypes(schema: BlockSchema, typing: Typing)(using schemata: Map[BlockSchemaId, BlockSchema]): BlockTy =
   println(s"Inferring type of $schema")
-  if typing.contains(schema) then
-    return typing(schema)
+  if typing.contains(schema.id) then
+    return typing(schema.id)
 
   for usedBlock <- schema.blocks do
-    if !typing.contains(usedBlock.schema) then
+    if !typing.contains(usedBlock.schemaId) then
       println(s"Recursing into $usedBlock")
-      typing += usedBlock.schema -> inferTypes(usedBlock.schema, typing)
+      typing += usedBlock.schemaId -> inferTypes(schemata(usedBlock.schemaId), typing)
 
   val coalescence = coalesceConnectedVertices(schema)
   val constraints = schema
     .blocks
-    .flatMap(b => typing(b.schema).constraints
+    .flatMap(b => typing(b.schemaId).constraints
       .map(_.map(b.freshMapping))
       .map(_.map(coalescence))
     )

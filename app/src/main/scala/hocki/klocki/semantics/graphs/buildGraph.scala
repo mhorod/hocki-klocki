@@ -5,4 +5,6 @@ import hocki.klocki.ast.Toplevel
 
 
 def buildGraph(ast: Toplevel, nr: ResolvedNames): List[BlockSchema] =
-  throw NotImplementedError("TODO")
+  val schemaIds = nr.schemaNames.values.map(binding => binding -> BlockSchemaId()).toMap
+  println(schemaIds)
+  List()

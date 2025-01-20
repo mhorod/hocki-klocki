@@ -1,11 +1,15 @@
+import hocki.klocki.ast.SchemaId
 import hocki.klocki.entities.{Dim, DimSetVar}
 import hocki.klocki.names.{NameGenerator, SimpleNameGenerator}
-import hocki.klocki.semantics.graphs.BlockSchema
+import hocki.klocki.semantics.graphs.{BlockSchema, BlockSchemaId}
 import hocki.klocki.typing.{BlockTy, addDimSchema, inferTypes, removeDimSchema, unionSchema}
 
 import scala.collection.mutable
 
 given NameGenerator = SimpleNameGenerator()
+
+def schemaMap(schemata: List[BlockSchema]): Map[BlockSchemaId, BlockSchema] =
+  schemata.map(schema => schema.id -> schema).toMap
 
 @main
 def chainedDimensionIntroductionsExample: BlockTy =
@@ -14,31 +18,36 @@ def chainedDimensionIntroductionsExample: BlockTy =
   val blockA = add_dim_a_schema.instantiate
   val blockB = add_dim_b_schema.instantiate
 
+  val schemata = schemaMap(List(add_dim_a_schema, add_dim_b_schema))
+
   val v0 = DimSetVar("X")
-  val v1 = blockA.freshMapping(blockA.schema.inVertices.head)
-  val v2 = blockA.freshMapping(blockA.schema.outVertices.head)
-  val v3 = blockB.freshMapping(blockB.schema.inVertices.head)
-  val v4 = blockB.freshMapping(blockB.schema.outVertices.head)
+  val v1 = blockA.freshMapping(schemata(blockA.schemaId).inVertices.head)
+  val v2 = blockA.freshMapping(schemata(blockA.schemaId).outVertices.head)
+  val v3 = blockB.freshMapping(schemata(blockB.schemaId).inVertices.head)
+  val v4 = blockB.freshMapping(schemata(blockB.schemaId).outVertices.head)
   val v5 = DimSetVar("Y")
 
   val schema = BlockSchema(
+    BlockSchemaId(),
     List(v0),
     List(v5),
     Set(blockA, blockB),
     Set(v0 -> v1, v2 -> v3, v4 -> v5)
   )
   val typing = collection.mutable.Map(
-    add_dim_a_schema -> add_dim_a_ty,
-    add_dim_b_schema -> add_dim_b_ty
+    add_dim_a_schema.id -> add_dim_a_ty,
+    add_dim_b_schema.id -> add_dim_b_ty
   )
 
-  inferTypes(schema, typing)
+  inferTypes(schema, typing)(using schemata)
 
 @main
 def parallelDimensionRemovalExample: BlockTy =
   val (add_dim_a_schema, add_dim_a_ty) = removeDimSchema(Dim("a"))
   val (add_dim_b_schema, add_dim_b_ty) = removeDimSchema(Dim("b"))
   val (union_schema, union_ty) = unionSchema(2)
+
+  val schemata = schemaMap(List(add_dim_a_schema, add_dim_b_schema, union_schema))
 
   val unionBlock1 = union_schema.instantiate
   val unionBlock2 = union_schema.instantiate
@@ -49,22 +58,23 @@ def parallelDimensionRemovalExample: BlockTy =
   val x1 = DimSetVar("X_1")
   val y = DimSetVar("Y")
 
-  val v0 = unionBlock1.freshMapping(unionBlock1.schema.inVertices.head)
-  val v1 = unionBlock1.freshMapping(unionBlock1.schema.inVertices(1))
-  val v2 = unionBlock1.freshMapping(unionBlock1.schema.outVertices.head)
+  val v0 = unionBlock1.freshMapping(schemata(unionBlock1.schemaId).inVertices.head)
+  val v1 = unionBlock1.freshMapping(schemata(unionBlock1.schemaId).inVertices(1))
+  val v2 = unionBlock1.freshMapping(schemata(unionBlock1.schemaId).outVertices.head)
 
-  val v3 = blockB.freshMapping(blockB.schema.inVertices.head)
-  val v4 = blockB.freshMapping(blockB.schema.outVertices.head)
+  val v3 = blockB.freshMapping(schemata(blockB.schemaId).inVertices.head)
+  val v4 = blockB.freshMapping(schemata(blockB.schemaId).outVertices.head)
 
-  val v5 = blockA.freshMapping(blockA.schema.inVertices.head)
-  val v6 = blockA.freshMapping(blockA.schema.outVertices.head)
+  val v5 = blockA.freshMapping(schemata(blockA.schemaId).inVertices.head)
+  val v6 = blockA.freshMapping(schemata(blockA.schemaId).outVertices.head)
 
-  val v7 = unionBlock2.freshMapping(unionBlock2.schema.inVertices.head)
-  val v8 = unionBlock2.freshMapping(unionBlock2.schema.inVertices(1))
-  val v9 = unionBlock2.freshMapping(unionBlock2.schema.outVertices.head)
+  val v7 = unionBlock2.freshMapping(schemata(unionBlock2.schemaId).inVertices.head)
+  val v8 = unionBlock2.freshMapping(schemata(unionBlock2.schemaId).inVertices(1))
+  val v9 = unionBlock2.freshMapping(schemata(unionBlock2.schemaId).outVertices.head)
 
 
   val schema = BlockSchema(
+    BlockSchemaId(),
     List(x0, x1),
     List(y),
     Set(unionBlock1, unionBlock2, blockA, blockB),
@@ -80,18 +90,20 @@ def parallelDimensionRemovalExample: BlockTy =
   )
 
   val typing = collection.mutable.Map(
-    add_dim_a_schema -> add_dim_a_ty,
-    add_dim_b_schema -> add_dim_b_ty,
-    union_schema -> union_ty
+    add_dim_a_schema.id -> add_dim_a_ty,
+    add_dim_b_schema.id -> add_dim_b_ty,
+    union_schema.id -> union_ty
   )
 
-  inferTypes(schema, typing)
+  inferTypes(schema, typing)(using schemata)
 
 @main
 def susExample: BlockTy =
   val dim_a = Dim("a")
   val (add_dim_a_schema, add_dim_a_ty) = addDimSchema(dim_a)
   val (remove_dim_a_schema, remove_dim_a_ty) = removeDimSchema(dim_a)
+
+  val schemata = schemaMap(List(add_dim_a_schema, remove_dim_a_schema))
 
   val add_dim_a_block = add_dim_a_schema.instantiate
   val remove_dim_a_block = remove_dim_a_schema.instantiate
@@ -100,13 +112,14 @@ def susExample: BlockTy =
   val y0 = DimSetVar("Y_0")
   val y1 = DimSetVar("Y_1")
 
-  val v0 = add_dim_a_block.freshMapping(add_dim_a_block.schema.inVertices.head)
-  val v1 = add_dim_a_block.freshMapping(add_dim_a_block.schema.outVertices.head)
+  val v0 = add_dim_a_block.freshMapping(schemata(add_dim_a_block.schemaId).inVertices.head)
+  val v1 = add_dim_a_block.freshMapping(schemata(add_dim_a_block.schemaId).outVertices.head)
 
-  val v2 = remove_dim_a_block.freshMapping(remove_dim_a_block.schema.inVertices.head)
-  val v3 = remove_dim_a_block.freshMapping(remove_dim_a_block.schema.outVertices.head)
+  val v2 = remove_dim_a_block.freshMapping(schemata(remove_dim_a_block.schemaId).inVertices.head)
+  val v3 = remove_dim_a_block.freshMapping(schemata(remove_dim_a_block.schemaId).outVertices.head)
 
   val schema = BlockSchema(
+    BlockSchemaId(),
     List(x),
     List(y0, y1),
     Set(add_dim_a_block, remove_dim_a_block),
@@ -119,13 +132,13 @@ def susExample: BlockTy =
   )
 
   val typing = collection.mutable.Map(
-    add_dim_a_schema -> add_dim_a_ty,
-    remove_dim_a_schema -> remove_dim_a_ty,
+    add_dim_a_schema.id -> add_dim_a_ty,
+    remove_dim_a_schema.id -> remove_dim_a_ty,
   )
 
-  inferTypes(schema, typing)
+  inferTypes(schema, typing)(using schemata)
 
-def funnySchema: (BlockSchema, mutable.Map[BlockSchema, BlockTy]) =
+def funnySchema: (BlockSchema, mutable.Map[BlockSchemaId, BlockTy], Map[BlockSchemaId, BlockSchema]) =
   val dim_a = Dim("a")
   val dim_b = Dim("b")
 
@@ -140,13 +153,16 @@ def funnySchema: (BlockSchema, mutable.Map[BlockSchema, BlockTy]) =
   val (remove_dim_b_schema, remove_dim_b_ty) = removeDimSchema(dim_b)
   val remove_dim_b_block = remove_dim_b_schema.instantiate
 
-  val v0 = add_dim_a_block.freshMapping(add_dim_a_block.schema.inVertices.head)
-  val v1 = add_dim_a_block.freshMapping(add_dim_a_block.schema.outVertices.head)
+  val schemata = schemaMap(List(add_dim_a_schema, remove_dim_b_schema))
 
-  val v2 = remove_dim_b_block.freshMapping(remove_dim_b_block.schema.inVertices.head)
-  val v3 = remove_dim_b_block.freshMapping(remove_dim_b_block.schema.outVertices.head)
+  val v0 = add_dim_a_block.freshMapping(schemata(add_dim_a_block.schemaId).inVertices.head)
+  val v1 = add_dim_a_block.freshMapping(schemata(add_dim_a_block.schemaId).outVertices.head)
+
+  val v2 = remove_dim_b_block.freshMapping(schemata(remove_dim_b_block.schemaId).inVertices.head)
+  val v3 = remove_dim_b_block.freshMapping(schemata(remove_dim_b_block.schemaId).outVertices.head)
 
   val schema = BlockSchema(
+    BlockSchemaId(),
     List(x0, x1),
     List(y0, y1),
     Set(add_dim_a_block, remove_dim_b_block),
@@ -159,20 +175,22 @@ def funnySchema: (BlockSchema, mutable.Map[BlockSchema, BlockTy]) =
   )
 
   val typing = collection.mutable.Map(
-    add_dim_a_schema -> add_dim_a_ty,
-    remove_dim_b_schema -> remove_dim_b_ty,
+    add_dim_a_schema.id -> add_dim_a_ty,
+    remove_dim_b_schema.id -> remove_dim_b_ty,
   )
 
-  (schema, typing)
+  (schema, typing, schemata)
 
 @main
 def funnySchemaExample: BlockTy =
-  val (schema, typing) = funnySchema
-  inferTypes(schema, typing)
+  val (schema, typing, schemata) = funnySchema
+  inferTypes(schema, typing)(using schemata)
 
 @main
 def funnySchemaSequential: BlockTy =
-  val (funny_schema, funny_typing) = funnySchema
+  val (funny_schema, funny_typing, innerSchemata) = funnySchema
+
+  val schemata = innerSchemata + (funny_schema.id -> funny_schema)
 
   val funny_block_1 = funny_schema.instantiate
   val funny_block_2 = funny_schema.instantiate
@@ -183,17 +201,18 @@ def funnySchemaSequential: BlockTy =
   val y1 = DimSetVar("Y_1")
 
 
-  val v0 = funny_block_1.freshMapping(funny_block_1.schema.inVertices.head)
-  val v1 = funny_block_1.freshMapping(funny_block_1.schema.inVertices(1))
-  val v2 = funny_block_1.freshMapping(funny_block_1.schema.outVertices.head)
-  val v3 = funny_block_1.freshMapping(funny_block_1.schema.outVertices(1))
+  val v0 = funny_block_1.freshMapping(schemata(funny_block_1.schemaId).inVertices.head)
+  val v1 = funny_block_1.freshMapping(schemata(funny_block_1.schemaId).inVertices(1))
+  val v2 = funny_block_1.freshMapping(schemata(funny_block_1.schemaId).outVertices.head)
+  val v3 = funny_block_1.freshMapping(schemata(funny_block_1.schemaId).outVertices(1))
 
-  val v4 = funny_block_2.freshMapping(funny_block_2.schema.inVertices.head)
-  val v5 = funny_block_2.freshMapping(funny_block_2.schema.inVertices(1))
-  val v6 = funny_block_2.freshMapping(funny_block_2.schema.outVertices.head)
-  val v7 = funny_block_2.freshMapping(funny_block_2.schema.outVertices(1))
+  val v4 = funny_block_2.freshMapping(schemata(funny_block_2.schemaId).inVertices.head)
+  val v5 = funny_block_2.freshMapping(schemata(funny_block_2.schemaId).inVertices(1))
+  val v6 = funny_block_2.freshMapping(schemata(funny_block_2.schemaId).outVertices.head)
+  val v7 = funny_block_2.freshMapping(schemata(funny_block_2.schemaId).outVertices(1))
 
   val schema = BlockSchema(
+    BlockSchemaId(),
     List(x0, x1),
     List(y0, y1),
     Set(funny_block_1, funny_block_2),
@@ -207,13 +226,15 @@ def funnySchemaSequential: BlockTy =
     ),
   )
 
-  inferTypes(schema, funny_typing)
+  inferTypes(schema, funny_typing)(using schemata)
 
 
 @main
 def funnySchemaExampleParallel: BlockTy =
-  val (funny_schema, funny_typing) = funnySchema
+  val (funny_schema, funny_typing, innerSchemata) = funnySchema
   val (union_schema, union_ty) = unionSchema(4)
+
+  val schemata = innerSchemata ++ schemaMap(List(funny_schema, union_schema))
 
   val funny_block_1 = funny_schema.instantiate
   val funny_block_2 = funny_schema.instantiate
@@ -223,24 +244,25 @@ def funnySchemaExampleParallel: BlockTy =
   val x1 = DimSetVar("X_1")
   val y = DimSetVar("Y")
 
-  val v0 = funny_block_1.freshMapping(funny_block_1.schema.inVertices.head)
-  val v1 = funny_block_1.freshMapping(funny_block_1.schema.inVertices(1))
-  val v2 = funny_block_1.freshMapping(funny_block_1.schema.outVertices.head)
-  val v3 = funny_block_1.freshMapping(funny_block_1.schema.outVertices(1))
+  val v0 = funny_block_1.freshMapping(schemata(funny_block_1.schemaId).inVertices.head)
+  val v1 = funny_block_1.freshMapping(schemata(funny_block_1.schemaId).inVertices(1))
+  val v2 = funny_block_1.freshMapping(schemata(funny_block_1.schemaId).outVertices.head)
+  val v3 = funny_block_1.freshMapping(schemata(funny_block_1.schemaId).outVertices(1))
 
-  val v4 = funny_block_2.freshMapping(funny_block_2.schema.inVertices.head)
-  val v5 = funny_block_2.freshMapping(funny_block_2.schema.inVertices(1))
-  val v6 = funny_block_2.freshMapping(funny_block_2.schema.outVertices.head)
-  val v7 = funny_block_2.freshMapping(funny_block_2.schema.outVertices(1))
+  val v4 = funny_block_2.freshMapping(schemata(funny_block_2.schemaId).inVertices.head)
+  val v5 = funny_block_2.freshMapping(schemata(funny_block_2.schemaId).inVertices(1))
+  val v6 = funny_block_2.freshMapping(schemata(funny_block_2.schemaId).outVertices.head)
+  val v7 = funny_block_2.freshMapping(schemata(funny_block_2.schemaId).outVertices(1))
 
-  val v8 = union_block.freshMapping(union_block.schema.inVertices.head)
-  val v9 = union_block.freshMapping(union_block.schema.inVertices(1))
-  val v10 = union_block.freshMapping(union_block.schema.inVertices(2))
-  val v11 = union_block.freshMapping(union_block.schema.inVertices(3))
-  val v12 = union_block.freshMapping(union_block.schema.outVertices.head)
+  val v8 = union_block.freshMapping(schemata(union_block.schemaId).inVertices.head)
+  val v9 = union_block.freshMapping(schemata(union_block.schemaId).inVertices(1))
+  val v10 = union_block.freshMapping(schemata(union_block.schemaId).inVertices(2))
+  val v11 = union_block.freshMapping(schemata(union_block.schemaId).inVertices(3))
+  val v12 = union_block.freshMapping(schemata(union_block.schemaId).outVertices.head)
 
 
   val schema = BlockSchema(
+    BlockSchemaId(),
     List(x0, x1),
     List(y),
     Set(funny_block_1, funny_block_2, union_block),
@@ -257,8 +279,8 @@ def funnySchemaExampleParallel: BlockTy =
     ),
   )
 
-  funny_typing.put(union_schema, union_ty)
-  inferTypes(schema, funny_typing)
+  funny_typing.put(union_schema.id, union_ty)
+  inferTypes(schema, funny_typing)(using schemata)
 
 @main
 def minimalistExample: BlockTy =
@@ -272,23 +294,28 @@ def minimalistExample: BlockTy =
   val (add_dim_a_schema, add_dim_a_ty) = addDimSchema(dim_a)
   val add_dim_a_block = add_dim_a_schema.instantiate
 
-  val v0 = add_dim_a_block.freshMapping(add_dim_a_block.schema.inVertices.head)
-  val v1 = add_dim_a_block.freshMapping(add_dim_a_block.schema.outVertices.head)
-
   val (union_schema, union_ty) = unionSchema(2)
   val union_block = union_schema.instantiate
-
-  val v2 = union_block.freshMapping(union_block.schema.inVertices.head)
-  val v3 = union_block.freshMapping(union_block.schema.inVertices(1))
-  val v4 = union_block.freshMapping(union_block.schema.outVertices.head)
 
   val (remove_dim_a_schema, remove_dim_a_ty) = removeDimSchema(dim_a)
   val remove_dim_a_block = remove_dim_a_schema.instantiate
 
-  val v5 = remove_dim_a_block.freshMapping(remove_dim_a_block.schema.inVertices.head)
-  val v6 = remove_dim_a_block.freshMapping(remove_dim_a_block.schema.outVertices.head)
+  val schemata = schemaMap(List(add_dim_a_schema, remove_dim_a_schema, union_schema))
+
+  val v0 = add_dim_a_block.freshMapping(schemata(add_dim_a_block.schemaId).inVertices.head)
+  val v1 = add_dim_a_block.freshMapping(schemata(add_dim_a_block.schemaId).outVertices.head)
+
+
+  val v2 = union_block.freshMapping(schemata(union_block.schemaId).inVertices.head)
+  val v3 = union_block.freshMapping(schemata(union_block.schemaId).inVertices(1))
+  val v4 = union_block.freshMapping(schemata(union_block.schemaId).outVertices.head)
+
+
+  val v5 = remove_dim_a_block.freshMapping(schemata(remove_dim_a_block.schemaId).inVertices.head)
+  val v6 = remove_dim_a_block.freshMapping(schemata(remove_dim_a_block.schemaId).outVertices.head)
 
   val schema = BlockSchema(
+    BlockSchemaId(),
     List(x0, x1),
     List(y),
     Set(add_dim_a_block, remove_dim_a_block, union_block),
@@ -302,9 +329,9 @@ def minimalistExample: BlockTy =
   )
 
   val typing = collection.mutable.Map(
-    add_dim_a_schema -> add_dim_a_ty,
-    remove_dim_a_schema -> remove_dim_a_ty,
-    union_schema -> union_ty
+    add_dim_a_schema.id -> add_dim_a_ty,
+    remove_dim_a_schema.id -> remove_dim_a_ty,
+    union_schema.id -> union_ty
   )
 
-  inferTypes(schema, typing)
+  inferTypes(schema, typing)(using schemata)
