@@ -1,6 +1,6 @@
 package hocki.klocki.typing
 
-import hocki.klocki.semantics.dims.{Dim, DimSetVar}
+import hocki.klocki.entities.{Dim, DimSetVar}
 
 extension (dim: Dim)
   infix def in(dimSetVar: DimSetVar): Constraint.In = Constraint.In(dim, dimSetVar)

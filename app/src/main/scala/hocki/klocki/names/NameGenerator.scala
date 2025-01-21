@@ -1,8 +1,9 @@
 package hocki.klocki.names
 
-import hocki.klocki.semantics.dims.{Dim, DimSetVar}
+import hocki.klocki.entities.{Dim, DimSetVar}
 
 trait NameGenerator:
   def freshDim(): Dim
   def freshInDimSetVar(): DimSetVar
   def freshOutDimSetVar(): DimSetVar
+  def refresh(dimSetVar: DimSetVar): DimSetVar

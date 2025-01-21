@@ -9,13 +9,11 @@ app = Flask(__name__,
 )
 
 def generate_graphviz_code(code):
-    return f'''
-    digraph G {{
-        rankdir=TP;
-        node [shape=box];
-        {code}
-    }}
-    '''
+    with open("dfl/file.dfl", "w") as f:
+        f.write(code)
+
+    subprocess.run(["java", "-jar", "dfl/app.jar", "dfl/file.dfl", "dfl/file.dot"])
+    return open("dfl/file.dot").read()
 
 @app.route('/generate-image', methods=['POST'])
 def generate_image():

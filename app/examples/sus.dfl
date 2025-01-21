@@ -1,0 +1,8 @@
+def sus = [X | Y0, Y1]
+    use +a[In | Out] as AddA
+    use -a[In | Out] as RemoveA
+    link
+        X >-> AddA.In,
+        X >-> RemoveA.In,
+        AddA.Out >-> Y0,
+        RemoveA.Out >-> Y1

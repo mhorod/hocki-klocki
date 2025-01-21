@@ -1,6 +1,6 @@
 package hocki.klocki.typing
 
-import hocki.klocki.semantics.dims.{Dim, DimSetVar}
+import hocki.klocki.entities.{Dim, DimSetVar}
 import hocki.klocki.semantics.graphs.{BlockSchema, builtinSchema}
 
 def addDimSchema(dim: Dim): (BlockSchema, BlockTy) =
