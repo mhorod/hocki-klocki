@@ -13,8 +13,15 @@
 <main>
 
     <div class="column">
-        Expansion depth: <input id="expansionDepth" type="number" min="-1" max="10" value="0">
-    <textarea id="codeInput" placeholder="Type your code here..."></textarea>
+        <div id="left-column">
+            <div>
+            Expansion depth: <input id="expansionDepth" type="number" min="-1" max="10" value="0">
+            </div>
+            <div>
+            Show typing: <input id="showTyping" type="checkbox">
+            </div>
+            <textarea id="codeInput" placeholder="Type your code here..."></textarea>
+        </div>
     </div>
 <div class="column">
     <img id="codeImage" src="" alt="Generated code image will appear here">

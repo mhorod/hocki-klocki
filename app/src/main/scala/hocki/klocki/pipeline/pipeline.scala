@@ -10,7 +10,7 @@ import hocki.klocki.visualize.schemataToGraphviz
 import java.io.{BufferedWriter, FileWriter}
 import scala.io.Source.fromFile
 
-def runPipeline(filename: String, outputFilename: String, expansionDepth: Int): Boolean =
+def runPipeline(filename: String, outputFilename: String, expansionDepth: Int, showTyping: Boolean): Boolean =
   load(filename) match
     case Some(tree) =>
       printTree(tree)

@@ -11,9 +11,10 @@ object Main:
     val filename = args(0)
     val outputFilename = args(1)
     val expansionDepth = if args.length > 2 then args(2).toInt else 0
+    val showTyping = if args.length > 3 then args(3).toBoolean else false
 
     try
-      val msg = if runPipeline(filename, outputFilename, expansionDepth) then "OK" else "FAIL"
+      val msg = if runPipeline(filename, outputFilename, expansionDepth, showTyping) then "OK" else "FAIL"
       println(msg)
     catch
       case e: Exception => {
