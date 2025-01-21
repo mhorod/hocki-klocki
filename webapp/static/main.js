@@ -1,6 +1,7 @@
 function updateImage() {
     const code = codeElement.value;
-    fetch("/generate-image", {
+    const expansionDepth = expansionDepthElement.value;
+    fetch(`/generate-image/${expansionDepth}`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({code: code})
@@ -15,5 +16,7 @@ function updateImage() {
 }
 
 const codeElement = document.getElementById('codeInput');
+const expansionDepthElement = document.getElementById('expansionDepth');
+
 codeElement.addEventListener('input', updateImage);
-console.log(codeElement)
+expansionDepthElement.addEventListener('input', updateImage);

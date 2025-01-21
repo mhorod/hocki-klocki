@@ -8,19 +8,20 @@ app = Flask(__name__,
     static_folder='static',
 )
 
-def generate_graphviz_code(code):
+def generate_graphviz_code(code, expansionDepth):
     with open("dfl/file.dfl", "w") as f:
         f.write(code)
 
-    subprocess.run(["java", "-jar", "dfl/app.jar", "dfl/file.dfl", "dfl/file.dot"])
+    print("Running java -jar dfl/app.jar dfl/file.dfl dfl/file.dot", expansionDepth)
+    subprocess.run(["java", "-jar", "dfl/app.jar", "dfl/file.dfl", "dfl/file.dot", expansionDepth])
     return open("dfl/file.dot").read()
 
-@app.route('/generate-image', methods=['POST'])
-def generate_image():
+@app.route('/generate-image/<expansionDepth>', methods=['POST'])
+def generate_image(expansionDepth):
     data = request.get_json()
     code = data['code']
 
-    graphviz_code = generate_graphviz_code(code)
+    graphviz_code = generate_graphviz_code(code, expansionDepth)
     with tempfile.NamedTemporaryFile(suffix='.dot', delete=False) as f:
         f.write(graphviz_code.encode('utf-8'))
         f.flush()
