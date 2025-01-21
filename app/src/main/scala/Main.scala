@@ -6,10 +6,14 @@ object Main:
       println("App requires two argument {source filename} {target filename}")
       return
 
+    println(args.mkString("Array(", ", ", ")"))
+
     val filename = args(0)
     val outputFilename = args(1)
+    val expansionDepth = if args.length > 2 then args(2).toInt else 0
+
     try
-      val msg = if runPipeline(filename, outputFilename) then "OK" else "FAIL"
+      val msg = if runPipeline(filename, outputFilename, expansionDepth) then "OK" else "FAIL"
       println(msg)
     catch
       case e: Exception => {

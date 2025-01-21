@@ -4,50 +4,63 @@ import hocki.klocki.entities.DimSetVar
 import hocki.klocki.semantics.graphs.{BlockSchema, BlockSchemaId}
 
 
-def unexpandedToGraphviz(schemata: List[BlockSchema]): String =
+def schemataToGraphviz(schemata: List[BlockSchema], expansionDepth: Int): String =
+  println(s"Expanding schemata to graphviz, $expansionDepth")
   val byId = schemata.map(schema => schema.id -> schema).toMap
   val str = schemata
     .filter(s => !s.name.contains("builtin"))
-    .map(schema => unexpandedToGraphviz(schema, byId)).mkString("\n")
+    .map(schema => schemaToGraphviz(schema, byId, expansionDepth, Map(), s"${schema.hashCode()}")).mkString("\n")
   s"""|digraph G {
       |  rankdir=TB
       |  $str
       |}""".stripMargin
 
-def unexpandedToGraphviz(schema: BlockSchema, byId: Map[BlockSchemaId, BlockSchema]): String =
-  val blocks = schema.blocks.map(
-    block =>
-      val blockSchema = byId(block.schemaId)
-      val inVertices = blockSchema.inVertices.map(block.freshMapping)
-      val outVertices = blockSchema.outVertices.map(block.freshMapping)
+def schemaToGraphviz
+(
+  schema: BlockSchema,
+  byId: Map[BlockSchemaId, BlockSchema],
+  expansionDepth: Int,
+  interfaceMapping: Map[DimSetVar, String],
+  vertexPrefix: String
+): String =
+  val nestedDepth = if expansionDepth > 0 then expansionDepth - 1 else expansionDepth
 
-      val edges = (for
-        inVertex <- inVertices
-        outVertex <- outVertices
-      yield s"${vertexName(schema, inVertex)} -> ${vertexName(schema, outVertex)} [style=invis]").mkString(";")
+  def vertexName(v: DimSetVar): String =
+    if interfaceMapping.contains(v) then
+      interfaceMapping(v)
+    else
+      s"V${vertexPrefix}_${v.name}"
 
-      val vertices = (inVertices ++ outVertices).map(v =>
-        s"${vertexName(schema, v)} [label=${v.name}]"
-      ).mkString(";")
-
-      s"""|    subgraph cluster_${block.hashCode()} {
-          |      label="${blockSchema.name}"
-          |      $vertices
-          |      $edges
-          |    }""".stripMargin
-  ).mkString("\n")
+  val blocks =
+    if expansionDepth == 0 then ""
+    else
+      schema.blocks.map(
+        block =>
+          val blockSchema = byId(block.schemaId)
+          val mapping = block.freshMapping
+          val interfaceMapping = (blockSchema.outVertices ++ blockSchema.inVertices)
+            .map(v => v -> vertexName(mapping(v)))
+            .toMap
+          schemaToGraphviz(blockSchema, byId, nestedDepth, interfaceMapping, vertexPrefix + s"_${block.hashCode()}")
+      ).mkString("\n")
 
   val inVertices = schema.inVertices
   val outVertices = schema.outVertices
   val vertices = (inVertices ++ outVertices).map(v =>
-    s"${vertexName(schema, v)} [label=${v.name}]"
+    s"${vertexName(v)} [label=${v.name}]"
   ).mkString(";")
 
-  val edges = schema.edges.map(
-    (from, to) =>
-      s"${vertexName(schema, from)} -> ${vertexName(schema, to)}"
-  ).mkString(";")
-  s"""|  subgraph cluster_${schema.id.hashCode()} {
+  val edges =
+    if expansionDepth == 0 || schema.edges.isEmpty then
+      (for (from <- inVertices; to <- outVertices) yield
+        s"${vertexName(from)} -> ${vertexName(to)} [style=invis]").mkString(";")
+    else
+      schema.edges.map(
+        (from, to) =>
+          s"${vertexName(from)} -> ${vertexName(to)}"
+      ).mkString(";")
+
+  s"""|  subgraph cluster_S$vertexPrefix {
       |    label="${schema.name}"
       |    $vertices
       |    $blocks
