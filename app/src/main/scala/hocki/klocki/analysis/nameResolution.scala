@@ -37,7 +37,7 @@ private def resolveNames(node: AstNode, ctx: Context)(using resolved: MutableRes
         case onIface: Abstra.OnIface =>
           resolveSequential(
             onIface.body :+ onIface.link,
-            (ctx + onIface.iface.allVerticesInOrder).withSchemata(schemaDefs(onIface.body))
+            ctx + onIface.iface.allVerticesInOrder
           )
         case onSchema: Abstra.OnSchema => resolveNames(onSchema.impl, ctx + onSchema.binding)
       ctx
@@ -45,7 +45,7 @@ private def resolveNames(node: AstNode, ctx: Context)(using resolved: MutableRes
       statement match
         case schemaDef: Statement.SchemaDef =>
           resolveNames(schemaDef.impl, ctx)
-          ctx
+          ctx + schemaDef.binding
         case use: Statement.BlockUse =>
           resolveUsedSchema(use.expr, ctx)
           val all = use.iface.allVerticesInOrder

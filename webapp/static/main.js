@@ -1,4 +1,4 @@
-function updateImage() {
+function update() {
     const code = codeElement.value;
     const expansionDepth = expansionDepthElement.value;
     const showTyping = showTypingElement.checked;
@@ -8,11 +8,21 @@ function updateImage() {
             body: JSON.stringify({code: code})
         }
     ).then(response => {
-        if (!response.ok) throw new Error("Non ok result status")
+        if (!response.ok) throw new Error("Non ok result status");
         return response.blob()
     })
         .then(blob => {
             document.getElementById("codeImage").src = URL.createObjectURL(blob);
+            if(showTyping) {
+                fetch('/get-typing').then(r => {
+                    if(!r.ok) throw new Error("Non ok return status");
+                    return r.json()
+                }).then(txt => {
+                    document.getElementById("typeBox").innerText = txt.ty;
+                });
+            } else {
+                document.getElementById("typeBox").innerHTML = "N/A";
+            }
         }).catch(err => err)
 }
 
@@ -21,5 +31,5 @@ const expansionDepthElement = document.getElementById('expansionDepth');
 const showTypingElement = document.getElementById('showTyping');
 
 const elements = [codeElement, expansionDepthElement, showTypingElement];
-elements.forEach(element => element.addEventListener('input', updateImage));
+elements.forEach(element => element.addEventListener('input', update));
 

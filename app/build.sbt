@@ -9,5 +9,6 @@ lazy val root = (project in file("."))
     name := "wdbn",
     libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % "2.4.0",
     assembly / mainClass := Some("Main"), // for sbt-assembly
+    assembly / assemblyJarName := "app.jar", // for sbt-assembly
   )
 

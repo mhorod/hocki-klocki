@@ -1,4 +1,4 @@
 package hocki.klocki.entities
 
-case class DimSetVar(name: String):
+class DimSetVar(val name: String):
   override def toString: String = name
