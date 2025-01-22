@@ -26,8 +26,8 @@ def generate_graphviz_code(code, expansionDepth, show_typing):
         "dfl/file.dot",
         expansionDepth,
     ]
-    if show_typing:
-        command.append('dfl/typing.txt')
+    if show_typing == 'true':
+       command.append('dfl/typing.txt')
     print("Running " + ' '.join(map(str, command)))
     subprocess.run(command)
     return open("dfl/file.dot").read()

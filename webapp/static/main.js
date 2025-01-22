@@ -14,6 +14,7 @@ function update() {
         .then(blob => {
             document.getElementById("codeImage").src = URL.createObjectURL(blob);
             if(showTyping) {
+                console.log("HERERERRE")
                 fetch('/get-typing').then(r => {
                     if(!r.ok) throw new Error("Non ok return status");
                     return r.json()

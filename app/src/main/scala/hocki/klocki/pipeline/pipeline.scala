@@ -36,7 +36,6 @@ def runPipeline
             try inferTypes(tree, names)
             catch case e: Exception =>
               writeToFile("<typing error>", filename)
-              e.printStackTrace()
               return false
           val typingPresentation = presentTyping(typing)
           writeToFile(typingPresentation, filename)
