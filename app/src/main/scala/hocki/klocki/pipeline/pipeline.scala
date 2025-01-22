@@ -1,25 +1,45 @@
 package hocki.klocki.pipeline
 
 import hocki.klocki.analysis.resolveNames
-import hocki.klocki.ast.Toplevel
+import hocki.klocki.ast.{SchemaBinding, Toplevel}
 import hocki.klocki.parsing.DflParser
 import hocki.klocki.semantics.graphs.buildGraph
+import hocki.klocki.typing.{SchemaTy, inferTypes}
 import hocki.klocki.utils.printTree
-import hocki.klocki.visualize.schemataToGraphviz
+import hocki.klocki.visualize.{presentTyping, schemataToGraphviz}
 
 import java.io.{BufferedWriter, FileWriter}
 import scala.io.Source.fromFile
 
-def runPipeline(filename: String, outputFilename: String, expansionDepth: Int, showTyping: Boolean): Boolean =
+def runPipeline
+(
+  filename: String,
+  outputFilename: String,
+  expansionDepth: Int,
+  typingFilename: Option[String],
+): Boolean =
   load(filename) match
     case Some(tree) =>
-      printTree(tree)
-      val names = resolveNames(tree)
+      val names =
+        try resolveNames(tree)
+        catch case e: Exception =>
+          println("Name resolution error")
+          return false
+
       val graph = buildGraph(tree, names)
       val graphviz = schemataToGraphviz(graph, expansionDepth)
-      val writer = BufferedWriter(new FileWriter(outputFilename))
-      writer.write(graphviz)
-      writer.close()
+      writeToFile(graphviz, outputFilename)
+
+      typingFilename match
+        case Some(filename) =>
+          val typing =
+            try inferTypes(tree, names)
+            catch case e: Exception =>
+              writeToFile("<typing error>", filename)
+              return false
+          val typingPresentation = presentTyping(typing)
+          writeToFile(typingPresentation, filename)
+        case None => ()
       true
     case None => false
 
@@ -36,3 +56,8 @@ private def load(filename: String): Option[Toplevel] =
       None
     case DflParser.Error(_, _) =>
       throw RuntimeException("Something very sad happened")
+
+private def writeToFile(content: String, filename: String): Unit =
+  val writer = BufferedWriter(new FileWriter(filename))
+  writer.write(content)
+  writer.close()

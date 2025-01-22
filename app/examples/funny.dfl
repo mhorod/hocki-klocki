@@ -30,4 +30,5 @@ def funny_parallel = [X0, X1 | Y0]
         Fst.Y0 >-> V0,
         Fst.Y1 >-> V1,
         Snd.Y0 >-> V2,
-        Snd.Y1 >-> V3
+        Snd.Y1 >-> V3,
+        W >-> Y0

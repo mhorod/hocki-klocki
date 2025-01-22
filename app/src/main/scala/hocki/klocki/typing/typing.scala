@@ -1,35 +1,122 @@
 package hocki.klocki.typing
 
+import hocki.klocki.analysis.ResolvedNames
+import hocki.klocki.ast.{Abstra, BuiltinSchema, SchemaBinding, SchemaExpr, Statement, Toplevel}
 import hocki.klocki.entities.{DimSetVar, Edge}
-import hocki.klocki.semantics.graphs.{BlockSchema, BlockSchemaId}
 import hocki.klocki.typing.Constraint.{In, InUnion, InducedBy, NotIn}
 
+import scala.collection.immutable
 import scala.collection.mutable
 import scala.reflect.ClassTag
 
-type Typing = mutable.Map[BlockSchemaId, BlockTy]
+def inferTypes(toplevel: Toplevel, nr: ResolvedNames): Map[SchemaBinding, SchemaTy] =
+  val typing = mutable.Map[SchemaBinding, SchemaTy]()
+  given mutable.Map[SchemaBinding, SchemaTy] = typing
+  given ResolvedNames = nr
+  val schemaDefs = toplevel.statements.collect { case schemaDef: Statement.SchemaDef => schemaDef }
+  val bindings =
+    schemaDefs.map[(SchemaBinding, Abstra.OnIface)](schemaDef =>
+      schemaDef.binding -> (
+        schemaDef.impl match
+          case onIface: Abstra.OnIface => onIface
+          case _: Abstra.OnSchema => throw IllegalStateException("Rank 1+ definitions verboten")
+      )
+    ).toMap
+  given Map[SchemaBinding, Abstra.OnIface] = bindings
+  schemaDefs.foreach(schemaDef => inferTypeFor(schemaDef.binding))
+  typing.toMap
 
-def inferTypes(schema: BlockSchema, typing: Typing)(using schemata: Map[BlockSchemaId, BlockSchema]): BlockTy =
-  println(s"Inferring type of $schema")
-  if typing.contains(schema.id) then
-    return typing(schema.id)
+private def inferTypeFor
+(schema: SchemaBinding)
+(using nr: ResolvedNames, typing: mutable.Map[SchemaBinding, SchemaTy], impls: Map[SchemaBinding, Abstra.OnIface])
+: Unit =
+  if typing.contains(schema) then
+    return
+  val impl = impls(schema)
+  val ins = impl.iface.suppliers.map(binding => DimSetVar(binding.id.toString))
+  val outs = impl.iface.consumers.map(binding => DimSetVar(binding.id.toString))
+  val blocks =
+    impl
+      .body
+      .map {
+        case use: Statement.BlockUse =>
+          val ty = getTypeOf(use.expr)
+          if ty.ins.size != use.iface.consumers.size then
+            throw IllegalStateException("Wrong number of consumers")
+          if ty.outs.size != use.iface.suppliers.size then
+            throw IllegalStateException("Wrong number of suppliers")
+          val blockName = use.name.getOrElse("<anon>")
+          val blockIns = use.iface.consumers.map(binding => DimSetVar(s"$blockName.${binding.id}"))
+          val blockOuts = use.iface.suppliers.map(binding => DimSetVar(s"$blockName.${binding.id}"))
+          val freshMapping = (ty.ins.zip(blockIns) ++ ty.outs.zip(blockOuts)).toMap
+          val constraints = ty.constraints.map(_.map(freshMapping))
+          (use.iface.allVerticesInOrder.zip(blockIns ++ blockOuts).toMap, constraints)
+        case schemaDef: Statement.SchemaDef => throw IllegalStateException("Nested defs verboten")
+      }
+      .toSet
+  val bindingsToDimSetVars = impl.iface.allVerticesInOrder.zip(ins ++ outs).toMap ++ blocks.flatMap(_._1)
+  val constraints = blocks.flatMap(_._2)
+  val links =
+    impl
+      .link
+      .connections
+      .map(conn =>
+        val from = bindingsToDimSetVars(nr.vertexNames(conn.from))
+        val to = bindingsToDimSetVars(nr.vertexNames(conn.to))
+        (from, to)
+      )
+      .toSet
+  typing.put(schema, inferTypeFromConstraints(ins, outs, constraints, links))
 
-  for usedBlock <- schema.blocks do
-    if !typing.contains(usedBlock.schemaId) then
-      println(s"Recursing into $usedBlock")
-      typing += usedBlock.schemaId -> inferTypes(schemata(usedBlock.schemaId), typing)
+private def getTypeOf
+(expr: SchemaExpr)
+(using nr: ResolvedNames, typing: mutable.Map[SchemaBinding, SchemaTy], impls: Map[SchemaBinding, Abstra.OnIface]): SchemaTy =
+  expr match
+    case primitive: SchemaExpr.Primitive =>
+      primitive.builtin match
+        case BuiltinSchema.Union(arity) =>
+          val xs = (0 until arity).map(i => DimSetVar(s"X$i")).toList
+          val y = DimSetVar("Y")
+          val constraint = y inducedBy xs.toSet.map(_ without Set())
+          SchemaTy(xs, List(y), Set(constraint))
+        case BuiltinSchema.Add(dim) =>
+          val x = DimSetVar("X")
+          val y = DimSetVar("Y")
+          val constraints = Set(
+            dim notIn x,
+            dim in y,
+            dim dependsOn (x without Set(dim)),
+            y inducedBy Set(x without Set(dim)),
+          )
+          SchemaTy(List(x), List(y), constraints)
+        case BuiltinSchema.Remove(dim) =>
+          val x = DimSetVar("X")
+          val y = DimSetVar("Y")
+          val constraints = Set(
+            dim notIn y,
+            dim inUnion Set(x),
+            y inducedBy Set(x without Set(dim))
+          )
+          SchemaTy(List(x), List(y), constraints)
+    case ref: SchemaExpr.SchemaRef =>
+      val binding = nr.schemaNames(ref)
+      inferTypeFor(binding)
+      typing(binding)
+    case app: SchemaExpr.App => throw IllegalStateException("Rank 1+ usages verboten")
 
-  val coalescence = coalesceConnectedVertices(schema)
-  val constraints = schema
-    .blocks
-    .flatMap(b => typing(b.schemaId).constraints
-      .map(_.map(b.freshMapping))
-      .map(_.map(coalescence))
-    )
+private def inferTypeFromConstraints
+(
+  inDimSetVars: List[DimSetVar],
+  outDimSetVars: List[DimSetVar],
+  assumedConstraints: Set[Constraint],
+  edges: Set[Edge]
+): SchemaTy =
+  val immediateConstraints = getImmediateConstraints(inDimSetVars, outDimSetVars, edges)
 
-  val unCoalescence = (schema.inVertices.map(v => v -> v) ++ schema.outVertices.map(v => coalescence(v) -> v)).toMap
+  val (coalescence, unCoalescence) = coalescing(inDimSetVars, outDimSetVars, edges)
+  val constraints = (immediateConstraints ++ assumedConstraints).map(_.map(coalescence))
 
-  println(schema.edges)
+  println(edges)
 
   val inductions = inferInductions(constraints)
 
@@ -72,26 +159,26 @@ def inferTypes(schema: BlockSchema, typing: Typing)(using schemata: Map[BlockSch
 
   val allConstraints = relevantInductions ++ relevantIns ++ relevantNotIns ++ relevantInUnions
 
-  val finalConstraints = allConstraints.map(_.map(unCoalescence))
+  val finalConstraints = allConstraints.map(_.map(unCoalescence)).toSet
 
   println("Final constraints")
   finalConstraints.foreach(println)
 
-  BlockTy(finalConstraints.toSet)
+  SchemaTy(inDimSetVars, outDimSetVars, finalConstraints)
 
-def inferIns(ins: Set[In], inductions: Set[InducedBy]): Set[In] =
+private def inferIns(ins: Set[In], inductions: Set[InducedBy]): Set[In] =
   ins ++ propagateInsDown(ins, inductions)
 
-def inferNotIns(notIns: Set[NotIn], inductions: Map[DimSetVar, InducedBy]): Set[NotIn] =
+private def inferNotIns(notIns: Set[NotIn], inductions: Map[DimSetVar, InducedBy]): Set[NotIn] =
   notIns ++ propagateNotInsUp(notIns, inductions)
 
-def inferInUnions(inUnions: Set[InUnion], inductions: Map[DimSetVar, InducedBy], notIns: Set[NotIn]): Set[InUnion] =
+private def inferInUnions(inUnions: Set[InUnion], inductions: Map[DimSetVar, InducedBy], notIns: Set[NotIn]): Set[InUnion] =
   inUnions ++ propagateInUnionsUp(inUnions, inductions, notIns)
 
-def getConstraints[V <: Constraint](constraints: Set[Constraint])(using classTag: ClassTag[V]): Set[V] =
+private def getConstraints[V <: Constraint](constraints: Set[Constraint])(using classTag: ClassTag[V]): Set[V] =
   constraints.collect { case c if classTag.runtimeClass.isInstance(c) => c.asInstanceOf[V] }
 
-def propagateInsDown(ins: Set[In], inductions: Set[InducedBy]): Set[In] =
+private def propagateInsDown(ins: Set[In], inductions: Set[InducedBy]): Set[In] =
   ins ++ ins.flatMap(
     // a \in X
     in => inductions
@@ -100,7 +187,7 @@ def propagateInsDown(ins: Set[In], inductions: Set[InducedBy]): Set[In] =
       .map[In](i => In(in.dim, i.induced))
   )
 
-def propagateNotInsUp(notIns: Set[NotIn], inductions: Map[DimSetVar, InducedBy]): Set[NotIn] =
+private def propagateNotInsUp(notIns: Set[NotIn], inductions: Map[DimSetVar, InducedBy]): Set[NotIn] =
   notIns.flatMap(
     notIn =>
       inductions.get(notIn.dimSetVar)
@@ -110,7 +197,7 @@ def propagateNotInsUp(notIns: Set[NotIn], inductions: Map[DimSetVar, InducedBy])
         .map[NotIn](inducer => NotIn(notIn.dim, inducer.dimSetVar))
   )
 
-def propagateInUnionsUp(inUnions: Set[InUnion], inductions: Map[DimSetVar, InducedBy], notIns: Set[NotIn]): Set[InUnion] =
+private def propagateInUnionsUp(inUnions: Set[InUnion], inductions: Map[DimSetVar, InducedBy], notIns: Set[NotIn]): Set[InUnion] =
   inUnions.map(
     inUnion => (
       inUnion.dim,
@@ -130,10 +217,10 @@ def propagateInUnionsUp(inUnions: Set[InUnion], inductions: Map[DimSetVar, Induc
   )
     .map[InUnion]((dim, union) => InUnion(dim, union))
 
-def pruneUnions(inUnions: Set[InUnion], ins: Set[In]): Set[InUnion] =
+private def pruneUnions(inUnions: Set[InUnion], ins: Set[In]): Set[InUnion] =
   inUnions.filter(inUnion => !inUnion.union.exists(elem => ins.contains(inUnion.dim in elem)))
 
-def inferInductions(constraints: Set[Constraint]): Map[DimSetVar, InducedBy] =
+private def inferInductions(constraints: Set[Constraint]): Map[DimSetVar, InducedBy] =
   val inductions = getConstraints[InducedBy](constraints)
     .groupBy(_.induced)
     .map((k, v) => k -> unionInductions(v))
@@ -158,7 +245,7 @@ def inferInductions(constraints: Set[Constraint]): Map[DimSetVar, InducedBy] =
 
   inductions.toMap
 
-def joinInductions(lhs: InducedBy, rhs: InducedBy): InducedBy =
+private def joinInductions(lhs: InducedBy, rhs: InducedBy): InducedBy =
   val filtered = lhs.inducers.find(_.dimSetVar == rhs.induced).get.filteredDimensions
   val newInducers = rhs.inducers.map(
     inducer =>
@@ -170,13 +257,13 @@ def joinInductions(lhs: InducedBy, rhs: InducedBy): InducedBy =
 
 
 extension (inducedBy: InducedBy)
-  infix def union(other: InducedBy): InducedBy = unionInductions(Set(inducedBy, other))
+  private infix def union(other: InducedBy): InducedBy = unionInductions(Set(inducedBy, other))
 
-def unionInductions(inductions: Set[InducedBy]): InducedBy =
+private def unionInductions(inductions: Set[InducedBy]): InducedBy =
   val inducers = unifyInducers(inductions.flatMap(_.inducers))
   InducedBy(inductions.head.induced, inducers)
 
-def unifyInducers(inducers: Set[FilteredDimSetVar]): Set[FilteredDimSetVar] =
+private def unifyInducers(inducers: Set[FilteredDimSetVar]): Set[FilteredDimSetVar] =
   inducers
     .groupBy(_.dimSetVar)
     .map((k, v) => k -> v.map(_.filteredDimensions))
@@ -184,8 +271,27 @@ def unifyInducers(inducers: Set[FilteredDimSetVar]): Set[FilteredDimSetVar] =
     .map((k, v) => FilteredDimSetVar(k, v))
     .toSet
 
-def coalesceConnectedVertices(blockSchema: BlockSchema): Map[DimSetVar, DimSetVar] =
-  blockSchema.edges.map(_.swap).toMap ++ blockSchema.edges.map(e => (e(0), e(0))).toMap
+private def coalescing
+(
+  ins: List[DimSetVar],
+  outs: List[DimSetVar],
+  edges: Set[Edge],
+)
+: (Map[DimSetVar, DimSetVar], Map[DimSetVar, DimSetVar]) =
+  val inSet = ins.toSet
+  val outSet = outs.toSet
+  val coalescence = outs.zip(outs).toMap ++ (
+    edges
+      .filterNot(e => inSet.contains(e._1) && outSet.contains(e._2))
+      .map(_.swap)
+    ++ edges.map(e => (e(0), e(0)))
+  ).toMap
+  val unCoalescence = (ins.map(v => v -> v) ++ outs.map(v => coalescence(v) -> v)).toMap
+  (coalescence, unCoalescence)
 
-
-def mapEdge(edge: Edge, mapping: Map[DimSetVar, DimSetVar]): Edge = (mapping(edge(0)), mapping(edge(1)))
+private def getImmediateConstraints(ins: List[DimSetVar], outs: List[DimSetVar], edges: Set[Edge]): Set[Constraint] =
+  val inSet = ins.toSet
+  val outSet = outs.toSet
+  edges
+    .filter(e => inSet.contains(e._1) && outSet.contains(e._2))
+    .map(e => InducedBy(e._2, Set(FilteredDimSetVar(e._1, Set()))))
