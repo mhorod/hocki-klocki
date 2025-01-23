@@ -34,9 +34,13 @@ def runPipeline
         case Some(filename) =>
           val typing =
             try inferTypes(tree, names)
-            catch case e: Exception =>
-              writeToFile("<typing error>", filename)
-              return false
+            catch
+              case e: StackOverflowError =>
+                writeToFile("typing poszedł w buraki", filename)
+                return false
+              case e: Exception =>
+                writeToFile("<typing error>", filename)
+                return false
           val typingPresentation = presentTyping(typing)
           writeToFile(typingPresentation, filename)
         case None => ()

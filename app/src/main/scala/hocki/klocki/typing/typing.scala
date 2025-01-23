@@ -11,8 +11,11 @@ import scala.reflect.ClassTag
 
 def inferTypes(toplevel: Toplevel, nr: ResolvedNames): Map[SchemaBinding, SchemaTy] =
   val typing = mutable.Map[SchemaBinding, SchemaTy]()
+
   given mutable.Map[SchemaBinding, SchemaTy] = typing
+
   given ResolvedNames = nr
+
   val schemaDefs = toplevel.statements.collect { case schemaDef: Statement.SchemaDef => schemaDef }
   val bindings =
     schemaDefs.map[(SchemaBinding, Abstra.OnIface)](schemaDef =>
@@ -20,9 +23,11 @@ def inferTypes(toplevel: Toplevel, nr: ResolvedNames): Map[SchemaBinding, Schema
         schemaDef.impl match
           case onIface: Abstra.OnIface => onIface
           case _: Abstra.OnSchema => throw IllegalStateException("Rank 1+ definitions verboten")
-      )
+        )
     ).toMap
+
   given Map[SchemaBinding, Abstra.OnIface] = bindings
+
   schemaDefs.foreach(schemaDef => inferTypeFor(schemaDef.binding))
   typing.toMap
 
@@ -85,7 +90,7 @@ private def getTypeOf
           val constraints = Set(
             dim notIn x,
             dim in y,
-            dim dependsOn (x without Set(dim)),
+            // dim dependsOn (x without Set(dim)),
             y inducedBy Set(x without Set(dim)),
           )
           SchemaTy(List(x), List(y), constraints)
@@ -117,19 +122,20 @@ private def inferTypeFromConstraints
   val constraints = (immediateConstraints ++ assumedConstraints).map(_.map(coalescence))
 
   println(edges)
+  constraints.foreach(println)
+  println()
 
   val inductions = inferInductions(constraints)
 
   val ins = inferIns(getConstraints[In](constraints), inductions.values.toSet)
   val notIns = inferNotIns(getConstraints[NotIn](constraints), inductions)
   val inUnions =
-    pruneUnions(inferInUnions(getConstraints[InUnion](constraints), inductions, notIns), ins)
+    pruneUnions(
+      inferInUnions(
+        getConstraints[InUnion](constraints)
+          .filter(inUnion => isNotSatisfied(inUnion, ins)),
+        inductions, notIns), ins)
 
-
-  inUnions.foreach { inUnion =>
-    if inUnion.union.isEmpty then
-      throw IllegalStateException(s"SUS: $inUnion")
-  }
 
   println("Ins:")
   ins.foreach(println)
@@ -139,6 +145,11 @@ private def inferTypeFromConstraints
 
   println("In unions:")
   inUnions.foreach(println)
+
+  inUnions.foreach { inUnion =>
+    if inUnion.union.isEmpty then
+      throw IllegalStateException(s"SUS: $inUnion")
+  }
 
   val relevantInductions =
     inductions
@@ -186,6 +197,9 @@ private def propagateInsDown(ins: Set[In], inductions: Set[InducedBy]): Set[In] 
       .filter(_.inducers.exists(inducer => inducer.dimSetVar == in.dimSetVar && !inducer.filteredDimensions.contains(in.dim)))
       .map[In](i => In(in.dim, i.induced))
   )
+
+private def isNotSatisfied(inUnion: InUnion, ins: Set[In]): Boolean =
+  !inUnion.union.exists(dsv => ins.contains(In(inUnion.dim, dsv)))
 
 private def propagateNotInsUp(notIns: Set[NotIn], inductions: Map[DimSetVar, InducedBy]): Set[NotIn] =
   notIns.flatMap(
@@ -284,8 +298,8 @@ private def coalescing
     edges
       .filterNot(e => inSet.contains(e._1) && outSet.contains(e._2))
       .map(_.swap)
-    ++ edges.map(e => (e(0), e(0)))
-  ).toMap
+      ++ edges.map(e => (e(0), e(0)))
+    ).toMap
   val unCoalescence = (ins.map(v => v -> v) ++ outs.map(v => coalescence(v) -> v)).toMap
   (coalescence, unCoalescence)
 
