@@ -52,7 +52,7 @@ private def load(filename: String): Option[Toplevel] =
   val code =
     try source.mkString
     finally source.close()
-  DflParser.parseAll(DflParser.program, code) match
+  DflParser.parseAll(DflParser.program, withoutComments(code)) match
     case DflParser.Success(result, _) => Some(result)
     case DflParser.Failure(msg, input) =>
       println(msg)
@@ -60,6 +60,8 @@ private def load(filename: String): Option[Toplevel] =
       None
     case DflParser.Error(_, _) =>
       throw RuntimeException("Something very sad happened")
+
+private def withoutComments(code: String) = code.replaceAll("#[^\n]*", "")
 
 private def writeToFile(content: String, filename: String): Unit =
   val writer = BufferedWriter(new FileWriter(filename))
