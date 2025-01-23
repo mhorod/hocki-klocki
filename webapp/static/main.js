@@ -81,9 +81,11 @@ def f = [X | Y]
 
 function selectExample() {
     const selection = exampleSelectElement.value;
-    if (selection !== "custom") {
+    if (selection !== "") {
         const selectionValue = parseInt(selection);
         codeElement.value = examples[selectionValue];
+    } else {
+        codeElement.value = ""
     }
     update()
 }
@@ -104,7 +106,6 @@ function update() {
         .then(blob => {
             document.getElementById("codeImage").src = URL.createObjectURL(blob);
             if (showTyping) {
-                console.log("HERERERRE")
                 fetch('/get-typing').then(r => {
                     if (!r.ok) throw new Error("Non ok return status");
                     return r.json()

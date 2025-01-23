@@ -21,3 +21,4 @@ object Main:
         println(s"TRAGEDY: $e")
         e.printStackTrace()
       }
+
