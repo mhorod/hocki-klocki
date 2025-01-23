@@ -61,7 +61,8 @@ def schemaToGraphviz
       ).mkString(";")
 
   s"""|  subgraph cluster_S$vertexPrefix {
-      |    label="${schema.name}"
+      |    label="${schema.name.replace("builtin ", "")}"
+      |    labeljust="l"
       |    $vertices
       |    $blocks
       |    $edges
