@@ -146,6 +146,11 @@ private def inferTypeFromConstraints
   println("In unions:")
   inUnions.foreach(println)
 
+  ins.foreach(
+    in => if notIns.contains(NotIn(in.dim,in.dimSetVar)) then
+      throw IllegalStateException(s"in / not in clash: $in")
+  )
+
   inUnions.foreach { inUnion =>
     if inUnion.union.isEmpty then
       throw IllegalStateException(s"SUS: $inUnion")
