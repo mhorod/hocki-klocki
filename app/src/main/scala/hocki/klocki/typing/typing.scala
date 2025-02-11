@@ -3,7 +3,7 @@ package hocki.klocki.typing
 import hocki.klocki.analysis.ResolvedNames
 import hocki.klocki.ast.{Abstra, BuiltinSchema, SchemaBinding, SchemaExpr, Statement, Toplevel}
 import hocki.klocki.entities.{DimSetVar, Edge}
-import hocki.klocki.typing.Constraint.{In, InUnion, InducedBy, NotIn}
+import hocki.klocki.typing.Constraint.{DependsOnAll, InUnion, InducedBy, NotIn}
 
 import scala.collection.immutable
 import scala.collection.mutable
@@ -89,17 +89,18 @@ private def getTypeOf
           val y = DimSetVar("Y")
           val constraints = Set(
             dim notIn x,
-            dim in y,
-            // dim dependsOn (x without Set(dim)),
+            (dim, y) dependsOnAll x,
             y inducedBy Set(x without Set(dim)),
+            dim isMin y
           )
           SchemaTy(List(x), List(y), constraints)
         case BuiltinSchema.Remove(dim) =>
           val x = DimSetVar("X")
           val y = DimSetVar("Y")
           val constraints = Set(
-            dim notIn y,
             dim inUnion Set(x),
+            dim isMin x,
+            dim notIn y,
             y inducedBy Set(x without Set(dim))
           )
           SchemaTy(List(x), List(y), constraints)
@@ -127,33 +128,33 @@ private def inferTypeFromConstraints
 
   val inductions = inferInductions(constraints)
 
-  val ins = inferIns(getConstraints[In](constraints), inductions.values.toSet)
+  val dependencies = inferDependencies(getConstraints[DependsOnAll](constraints), inductions.values.toSet)
   val notIns = inferNotIns(getConstraints[NotIn](constraints), inductions)
   val inUnions =
-    pruneUnions(
       inferInUnions(
-        getConstraints[InUnion](constraints)
-          .filter(inUnion => isNotSatisfied(inUnion, ins)),
-        inductions, notIns), ins)
+        getConstraints[InUnion](constraints).filterNot(isSatisfied(_, dependencies)),
+        inductions,
+        notIns
+      ).filterNot(isSatisfied(_, dependencies))
 
 
   println("Ins:")
-  ins.foreach(println)
+  dependencies.foreach(println)
 
-  println("Not ins:")
+  println("Not dependencies:")
   notIns.foreach(println)
 
   println("In unions:")
   inUnions.foreach(println)
 
-  ins.foreach(
-    in => if notIns.contains(NotIn(in.dim,in.dimSetVar)) then
-      throw IllegalStateException(s"in / not in clash: $in")
+  dependencies.foreach(
+    dependency => if notIns.contains(NotIn(dependency.dim, dependency.ctx)) then
+      throw IllegalStateException(s"in / not in clash: $dependency (typing poszedł w kalarepę)")
   )
 
   inUnions.foreach { inUnion =>
     if inUnion.union.isEmpty then
-      throw IllegalStateException(s"SUS: $inUnion")
+      throw IllegalStateException(s"membership of empty union: $inUnion (typing poszedł w bataty)")
   }
 
   val relevantInductions =
@@ -165,7 +166,9 @@ private def inferTypeFromConstraints
       )
       .filter(inducedBy => unCoalescence.contains(inducedBy.induced))
 
-  val relevantIns = ins.filter(in => unCoalescence.contains(in.dimSetVar))
+  val relevantDependencies = dependencies.filter(in =>
+    unCoalescence.contains(in.ctx) && unCoalescence.contains(in.dependency.dimSetVar)
+  )
   val relevantNotIns = notIns.filter(notIn => unCoalescence.contains(notIn.dimSetVar))
 
   val relevantInUnions =
@@ -173,7 +176,7 @@ private def inferTypeFromConstraints
       .map[InUnion](inUnion => InUnion(inUnion.dim, inUnion.union.filter(d => unCoalescence.contains(d))))
       .filter(_.union.nonEmpty)
 
-  val allConstraints = relevantInductions ++ relevantIns ++ relevantNotIns ++ relevantInUnions
+  val allConstraints = relevantInductions ++ relevantDependencies ++ relevantNotIns ++ relevantInUnions
 
   val finalConstraints = allConstraints.map(_.map(unCoalescence)).toSet
 
@@ -182,8 +185,8 @@ private def inferTypeFromConstraints
 
   SchemaTy(inDimSetVars, outDimSetVars, finalConstraints)
 
-private def inferIns(ins: Set[In], inductions: Set[InducedBy]): Set[In] =
-  ins ++ propagateInsDown(ins, inductions)
+private def inferDependencies(deps: Set[Constraint.DependsOnAll], inductions: Set[Constraint.InducedBy]): Set[DependsOnAll] =
+  ???
 
 private def inferNotIns(notIns: Set[NotIn], inductions: Map[DimSetVar, InducedBy]): Set[NotIn] =
   notIns ++ propagateNotInsUp(notIns, inductions)
@@ -194,17 +197,9 @@ private def inferInUnions(inUnions: Set[InUnion], inductions: Map[DimSetVar, Ind
 private def getConstraints[V <: Constraint](constraints: Set[Constraint])(using classTag: ClassTag[V]): Set[V] =
   constraints.collect { case c if classTag.runtimeClass.isInstance(c) => c.asInstanceOf[V] }
 
-private def propagateInsDown(ins: Set[In], inductions: Set[InducedBy]): Set[In] =
-  ins ++ ins.flatMap(
-    // a \in X
-    in => inductions
-      // leave inductions Y \supseteq U X \ A where a \notin a
-      .filter(_.inducers.exists(inducer => inducer.dimSetVar == in.dimSetVar && !inducer.filteredDimensions.contains(in.dim)))
-      .map[In](i => In(in.dim, i.induced))
-  )
 
-private def isNotSatisfied(inUnion: InUnion, ins: Set[In]): Boolean =
-  !inUnion.union.exists(dsv => ins.contains(In(inUnion.dim, dsv)))
+private def isSatisfied(inUnion: InUnion, dependencies: Set[DependsOnAll]): Boolean =
+  inUnion.union.exists(dsv => dependencies.exists(dep => dep.dim == inUnion.dim && dsv == dep.ctx))
 
 private def propagateNotInsUp(notIns: Set[NotIn], inductions: Map[DimSetVar, InducedBy]): Set[NotIn] =
   notIns.flatMap(
@@ -235,9 +230,6 @@ private def propagateInUnionsUp(inUnions: Set[InUnion], inductions: Map[DimSetVa
     )
   )
     .map[InUnion]((dim, union) => InUnion(dim, union))
-
-private def pruneUnions(inUnions: Set[InUnion], ins: Set[In]): Set[InUnion] =
-  inUnions.filter(inUnion => !inUnion.union.exists(elem => ins.contains(inUnion.dim in elem)))
 
 private def inferInductions(constraints: Set[Constraint]): Map[DimSetVar, InducedBy] =
   val inductions = getConstraints[InducedBy](constraints)
