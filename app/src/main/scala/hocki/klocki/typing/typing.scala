@@ -158,8 +158,8 @@ private def inferTypeFromConstraints
       )
       .filter(inducedBy => unCoalescence.contains(inducedBy.induced))
 
-  val relevantDependencies = dependencies.filter(in =>
-    unCoalescence.contains(in.ctx) && unCoalescence.contains(in.dependency.dimSetVar)
+  val relevantDependencies = dependencies.filter(dep =>
+    unCoalescence.contains(dep.ctx) && unCoalescence.contains(dep.dependency.dimSetVar)
   )
   val relevantNotIns = notIns.filter(notIn => unCoalescence.contains(notIn.dimSetVar))
   val relevantMinima = minima.filter(isMin => unCoalescence.contains(isMin.filteredDimSetVar.dimSetVar))
@@ -196,14 +196,20 @@ private def assertNoContradictions(constraints: Set[Constraint]): Unit =
 
   val explicitDependencies = getConstraints[DependsOnDim](constraints)
   getConstraints[IsMin](constraints).foreach(isMin =>
-    if explicitDependencies.exists(d => d.dependency == isMin.dim) then
+    val minimalDependency = explicitDependencies.exists(d =>
+      d.dependency == isMin.dim
+        && d.ctx == isMin.filteredDimSetVar.dimSetVar
+        && !isMin.filteredDimSetVar.filteredDimensions.contains(d.dim)
+    )
+    if minimalDependency then
       throw IllegalStateException(
         s"dim ${isMin.dim} must be minimal but simultaneously is a dependency: typing poszedł w rzodkiew"
       )
   )
 
 private def inferDependencies(deps: Set[DependsOnAll], inductions: Map[DimSetVar, InducedBy]): Set[DependsOnAll] =
-  deps ++ propagateDependenciesDown(deps, inductions)
+  val propagatedDown = deps ++ propagateDependenciesDown(deps, inductions)
+  propagatedDown ++ propagateDependenciesUp(propagatedDown, inductions)
 
 private def inferMinima(minima: Set[IsMin], inductions: Map[DimSetVar, InducedBy]): Set[IsMin] =
   minima ++ propagateMinimaUp(minima, inductions)
@@ -236,6 +242,19 @@ private def propagateDependenciesDown(deps: Set[DependsOnAll], inductions: Map[D
         (dep.dim, induced) dependsOnAll (dep.dependency.dimSetVar without joinedFiltered)
       }
   )
+
+private def propagateDependenciesUp(deps: Set[DependsOnAll], inductions: Map[DimSetVar, InducedBy]): Set[DependsOnAll] =
+  deps
+    .flatMap(dep =>
+      inductions
+        .get(dep.dependency.dimSetVar)
+        .map(_.inducers)
+        .getOrElse(Set())
+        .map(inducer =>
+          val joinedFiltered = dep.dependency.filteredDimensions union inducer.filteredDimensions
+          (dep.dim, dep.ctx) dependsOnAll (inducer.dimSetVar without joinedFiltered)
+        )
+    )
 
 private def inferDirectDependencies(deps: Set[DependsOnAll]): Set[DependsOnDim] =
   deps.flatMap(
