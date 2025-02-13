@@ -1,8 +1,8 @@
 
 def main = [X | Y]
-    use +a [X | Y] as RemoveA
-    use +a [X | Y] as AddA
+    use +a [X | Y] as Add1
+    use +a [X | Y] as Add2
     link
-        X >-> RemoveA.X,
-        RemoveA.Y >-> AddA.X,
-        AddA.Y >-> Y
+        X >-> Add1.X,
+        Add1.Y >-> Add2.X,
+        Add2.Y >-> Y

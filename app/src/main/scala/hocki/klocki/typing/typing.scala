@@ -3,7 +3,7 @@ package hocki.klocki.typing
 import hocki.klocki.analysis.ResolvedNames
 import hocki.klocki.ast.{Abstra, BuiltinSchema, SchemaBinding, SchemaExpr, Statement, Toplevel}
 import hocki.klocki.entities.{DimSetVar, Edge}
-import hocki.klocki.typing.Constraint.{DependsOnAll, InUnion, InducedBy, NotIn}
+import hocki.klocki.typing.Constraint.{DependsOnAll, DependsOnDim, InUnion, InducedBy, IsMin, NotIn}
 
 import scala.collection.immutable
 import scala.collection.mutable
@@ -35,6 +35,7 @@ private def inferTypeFor
 (schema: SchemaBinding)
 (using nr: ResolvedNames, typing: mutable.Map[SchemaBinding, SchemaTy], impls: Map[SchemaBinding, Abstra.OnIface])
 : Unit =
+  given SchemaBinding = schema
   if typing.contains(schema) then
     return
   val impl = impls(schema)
@@ -116,19 +117,20 @@ private def inferTypeFromConstraints
   outDimSetVars: List[DimSetVar],
   assumedConstraints: Set[Constraint],
   edges: Set[Edge]
-): SchemaTy =
+)
+(using environment: SchemaBinding)
+: SchemaTy =
   val immediateConstraints = getImmediateConstraints(inDimSetVars, outDimSetVars, edges)
 
   val (coalescence, unCoalescence) = coalescing(inDimSetVars, outDimSetVars, edges)
   val constraints = (immediateConstraints ++ assumedConstraints).map(_.map(coalescence))
 
-  println(edges)
+  println(s"Constraints from schemata used within ${environment.id}:")
   constraints.foreach(println)
   println()
 
   val inductions = inferInductions(constraints)
-
-  val dependencies = inferDependencies(getConstraints[DependsOnAll](constraints), inductions.values.toSet)
+  val dependencies = inferDependencies(getConstraints[DependsOnAll](constraints), inductions)
   val notIns = inferNotIns(getConstraints[NotIn](constraints), inductions)
   val inUnions =
       inferInUnions(
@@ -136,30 +138,20 @@ private def inferTypeFromConstraints
         inductions,
         notIns
       ).filterNot(isSatisfied(_, dependencies))
+  val minima = inferMinima(getConstraints[IsMin](constraints), inductions)
+  val directDependencies = inferDirectDependencies(dependencies)
 
+  val allConstraints = inductions.values.toSet ++ dependencies ++ notIns ++ inUnions ++ minima ++ directDependencies
+  println(s"All constraints for ${environment.id}:")
+  allConstraints.foreach(println)
+  println()
 
-  println("Ins:")
-  dependencies.foreach(println)
-
-  println("Not dependencies:")
-  notIns.foreach(println)
-
-  println("In unions:")
-  inUnions.foreach(println)
-
-  dependencies.foreach(
-    dependency => if notIns.contains(NotIn(dependency.dim, dependency.ctx)) then
-      throw IllegalStateException(s"in / not in clash: $dependency (typing poszedł w kalarepę)")
-  )
-
-  inUnions.foreach { inUnion =>
-    if inUnion.union.isEmpty then
-      throw IllegalStateException(s"membership of empty union: $inUnion (typing poszedł w bataty)")
-  }
+  assertNoContradictions(allConstraints)
 
   val relevantInductions =
     inductions
       .values
+      .toSet
       .map[InducedBy](
         inducedBy =>
           InducedBy(inducedBy.induced, inducedBy.inducers.filter(d => unCoalescence.contains(d.dimSetVar)))
@@ -170,23 +162,51 @@ private def inferTypeFromConstraints
     unCoalescence.contains(in.ctx) && unCoalescence.contains(in.dependency.dimSetVar)
   )
   val relevantNotIns = notIns.filter(notIn => unCoalescence.contains(notIn.dimSetVar))
-
+  val relevantMinima = minima.filter(isMin => unCoalescence.contains(isMin.filteredDimSetVar.dimSetVar))
   val relevantInUnions =
     inUnions
       .map[InUnion](inUnion => InUnion(inUnion.dim, inUnion.union.filter(d => unCoalescence.contains(d))))
       .filter(_.union.nonEmpty)
 
-  val allConstraints = relevantInductions ++ relevantDependencies ++ relevantNotIns ++ relevantInUnions
+  val allRelevantConstraints =
+    relevantInductions
+      ++ relevantDependencies
+      ++ relevantMinima
+      ++ relevantNotIns
+      ++ relevantInUnions
 
-  val finalConstraints = allConstraints.map(_.map(unCoalescence)).toSet
+  val finalConstraints = allRelevantConstraints.map(_.map(unCoalescence))
 
-  println("Final constraints")
+  println(s"Final constraints for ${environment.id}:")
   finalConstraints.foreach(println)
+  println()
 
   SchemaTy(inDimSetVars, outDimSetVars, finalConstraints)
 
-private def inferDependencies(deps: Set[Constraint.DependsOnAll], inductions: Set[Constraint.InducedBy]): Set[DependsOnAll] =
-  ???
+private def assertNoContradictions(constraints: Set[Constraint]): Unit =
+  getConstraints[DependsOnAll](constraints).foreach(
+    dependency => if constraints.contains(NotIn(dependency.dim, dependency.ctx)) then
+      throw IllegalStateException(s"in / not in clash: $dependency (typing poszedł w kalarepę)")
+  )
+
+  getConstraints[InUnion](constraints).foreach(inUnion =>
+    if inUnion.union.isEmpty then
+      throw IllegalStateException(s"membership of empty union: $inUnion (typing poszedł w bataty)")
+  )
+
+  val explicitDependencies = getConstraints[DependsOnDim](constraints)
+  getConstraints[IsMin](constraints).foreach(isMin =>
+    if explicitDependencies.exists(d => d.dependency == isMin.dim) then
+      throw IllegalStateException(
+        s"dim ${isMin.dim} must be minimal but simultaneously is a dependency: typing poszedł w rzodkiew"
+      )
+  )
+
+private def inferDependencies(deps: Set[DependsOnAll], inductions: Map[DimSetVar, InducedBy]): Set[DependsOnAll] =
+  deps ++ propagateDependenciesDown(deps, inductions)
+
+private def inferMinima(minima: Set[IsMin], inductions: Map[DimSetVar, InducedBy]): Set[IsMin] =
+  minima ++ propagateMinimaUp(minima, inductions)
 
 private def inferNotIns(notIns: Set[NotIn], inductions: Map[DimSetVar, InducedBy]): Set[NotIn] =
   notIns ++ propagateNotInsUp(notIns, inductions)
@@ -197,9 +217,45 @@ private def inferInUnions(inUnions: Set[InUnion], inductions: Map[DimSetVar, Ind
 private def getConstraints[V <: Constraint](constraints: Set[Constraint])(using classTag: ClassTag[V]): Set[V] =
   constraints.collect { case c if classTag.runtimeClass.isInstance(c) => c.asInstanceOf[V] }
 
-
 private def isSatisfied(inUnion: InUnion, dependencies: Set[DependsOnAll]): Boolean =
   inUnion.union.exists(dsv => dependencies.exists(dep => dep.dim == inUnion.dim && dsv == dep.ctx))
+
+private def propagateDependenciesDown(deps: Set[DependsOnAll], inductions: Map[DimSetVar, InducedBy]): Set[DependsOnAll] =
+  deps.flatMap(dep =>
+    inductions
+      .values
+      .flatMap(inducedBy =>
+        inducedBy
+          .inducers
+          .find(filteredDsv => filteredDsv.dimSetVar == dep.ctx)
+          .map(filteredDsv => (inducedBy.induced, filteredDsv.filteredDimensions))
+      )
+      .filterNot { case (_, filtered) => filtered.contains(dep.dim) }
+      .map { case (induced, filtered) =>
+        val joinedFiltered = dep.dependency.filteredDimensions union filtered
+        (dep.dim, induced) dependsOnAll (dep.dependency.dimSetVar without joinedFiltered)
+      }
+  )
+
+private def inferDirectDependencies(deps: Set[DependsOnAll]): Set[DependsOnDim] =
+  deps.flatMap(
+    a => deps
+      .filter(b =>
+        a.dim != b.dim
+          && a.dependency.dimSetVar == b.dependency.dimSetVar
+          && !a.dependency.filteredDimensions.contains(b.dim)
+      )
+      .map(b => (a.dim, a.dependency.dimSetVar) dependsOnDim b.dim)
+  )
+
+private def propagateMinimaUp(minima: Set[IsMin], inductions: Map[DimSetVar, InducedBy]): Set[IsMin] =
+  minima.flatMap(
+    isMin => inductions
+      .get(isMin.filteredDimSetVar.dimSetVar)
+      .map(_.inducers)
+      .getOrElse(Set())
+      .map[IsMin](inducer => IsMin(isMin.dim, inducer.unionJoin(isMin.filteredDimSetVar)))
+  )
 
 private def propagateNotInsUp(notIns: Set[NotIn], inductions: Map[DimSetVar, InducedBy]): Set[NotIn] =
   notIns.flatMap(

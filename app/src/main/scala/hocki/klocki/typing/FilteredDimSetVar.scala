@@ -8,3 +8,6 @@ case class FilteredDimSetVar(dimSetVar: DimSetVar, filteredDimensions: Set[Dim])
 
   def map(mapping: Map[DimSetVar, DimSetVar]): FilteredDimSetVar =
     FilteredDimSetVar(mapping(dimSetVar), filteredDimensions)
+
+  def unionJoin(other: FilteredDimSetVar): FilteredDimSetVar =
+    FilteredDimSetVar(dimSetVar, filteredDimensions ++ other.filteredDimensions)

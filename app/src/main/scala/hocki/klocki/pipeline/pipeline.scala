@@ -39,6 +39,7 @@ def runPipeline
                 writeToFile("typing poszedł w buraki", filename)
                 return false
               case e: Exception =>
+                println(e)
                 writeToFile("<typing error>", filename)
                 return false
           val typingPresentation = presentTyping(typing)
