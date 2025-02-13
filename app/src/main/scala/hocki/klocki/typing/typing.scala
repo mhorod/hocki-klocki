@@ -125,9 +125,7 @@ private def inferTypeFromConstraints
   val (coalescence, unCoalescence) = coalescing(inDimSetVars, outDimSetVars, edges)
   val constraints = (immediateConstraints ++ assumedConstraints).map(_.map(coalescence))
 
-  println(s"Constraints from schemata used within ${environment.id}:")
-  constraints.foreach(println)
-  println()
+  presentConstraints(s"Constraints from schemata used within ${environment.id}:", constraints)
 
   val inductions = inferInductions(constraints)
   val dependencies = inferDependencies(getConstraints[DependsOnAll](constraints), inductions)
@@ -139,12 +137,10 @@ private def inferTypeFromConstraints
         notIns
       ).filterNot(isSatisfied(_, dependencies))
   val minima = inferMinima(getConstraints[IsMin](constraints), inductions)
-  val directDependencies = inferDirectDependencies(dependencies)
+  val directDependencies = getConstraints[DependsOnDim](constraints) ++ inferDirectDependencies(dependencies)
 
   val allConstraints = inductions.values.toSet ++ dependencies ++ notIns ++ inUnions ++ minima ++ directDependencies
-  println(s"All constraints for ${environment.id}:")
-  allConstraints.foreach(println)
-  println()
+  presentConstraints(s"All constraints for ${environment.id}:", allConstraints)
 
   assertNoContradictions(allConstraints)
 
@@ -162,11 +158,15 @@ private def inferTypeFromConstraints
     unCoalescence.contains(dep.ctx) && unCoalescence.contains(dep.dependency.dimSetVar)
   )
   val relevantNotIns = notIns.filter(notIn => unCoalescence.contains(notIn.dimSetVar))
-  val relevantMinima = minima.filter(isMin => unCoalescence.contains(isMin.filteredDimSetVar.dimSetVar))
+  val relevantMinima =
+    minima
+      .filterNot(isMin => isMin.filteredDimSetVar.filteredDimensions.contains(isMin.dim))
+      .filter(isMin => unCoalescence.contains(isMin.filteredDimSetVar.dimSetVar))
   val relevantInUnions =
     inUnions
       .map[InUnion](inUnion => InUnion(inUnion.dim, inUnion.union.filter(d => unCoalescence.contains(d))))
       .filter(_.union.nonEmpty)
+  val relevantDirectDependencies = directDependencies.filter(dep => unCoalescence.contains(dep.ctx))
 
   val allRelevantConstraints =
     relevantInductions
@@ -174,12 +174,11 @@ private def inferTypeFromConstraints
       ++ relevantMinima
       ++ relevantNotIns
       ++ relevantInUnions
+      ++ relevantDirectDependencies
 
   val finalConstraints = allRelevantConstraints.map(_.map(unCoalescence))
 
-  println(s"Final constraints for ${environment.id}:")
-  finalConstraints.foreach(println)
-  println()
+  presentConstraints(s"Final constraints for ${environment.id}:", finalConstraints)
 
   SchemaTy(inDimSetVars, outDimSetVars, finalConstraints)
 
@@ -203,7 +202,7 @@ private def assertNoContradictions(constraints: Set[Constraint]): Unit =
     )
     if minimalDependency then
       throw IllegalStateException(
-        s"dim ${isMin.dim} must be minimal but simultaneously is a dependency: typing poszedł w rzodkiew"
+        s"dim ${isMin.dim} must be minimal but simultaneously is a dependency (typing poszedł w rzodkiew)"
       )
   )
 
@@ -261,10 +260,10 @@ private def inferDirectDependencies(deps: Set[DependsOnAll]): Set[DependsOnDim] 
     a => deps
       .filter(b =>
         a.dim != b.dim
-          && a.dependency.dimSetVar == b.dependency.dimSetVar
+          && a.dependency.dimSetVar == b.ctx
           && !a.dependency.filteredDimensions.contains(b.dim)
       )
-      .map(b => (a.dim, a.dependency.dimSetVar) dependsOnDim b.dim)
+      .map(b => (a.dim, a.ctx) dependsOnDim b.dim)
   )
 
 private def propagateMinimaUp(minima: Set[IsMin], inductions: Map[DimSetVar, InducedBy]): Set[IsMin] =

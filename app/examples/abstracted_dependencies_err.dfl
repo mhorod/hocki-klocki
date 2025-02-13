@@ -1,0 +1,23 @@
+def abstracted_add = [X | Y]
+    use +a [X | Y] as AddA
+    use +b [X | Y] as AddB
+    link
+        X >-> AddA.X,
+        AddA.Y >-> AddB.X,
+        AddB.Y >-> Y
+
+def abstracted_remove = [X | Y]
+    use -a [X | Y] as RemoveA
+    use -b [X | Y] as RemoveB
+    link
+        X >-> RemoveA.X,
+        RemoveA.Y >-> RemoveB.X,
+        RemoveB.Y >-> Y
+
+def main = [X | Y]
+    use abstracted_add [X | Y] as Add
+    use abstracted_remove [X | Y] as Remove
+    link
+        X >-> Add.X,
+        Add.Y >-> Remove.X,
+        Remove.Y >-> Y

@@ -21,3 +21,8 @@ extension (dimInCtx: (Dim, DimSetVar))
 extension (dimSetVar: DimSetVar)
   infix def inducedBy(inducers: Set[FilteredDimSetVar]): Constraint.InducedBy = Constraint.InducedBy(dimSetVar, inducers)
   infix def without(dims: Set[Dim]): FilteredDimSetVar = FilteredDimSetVar(dimSetVar, dims)
+
+def presentConstraints(header: String, constraints: Set[Constraint]): Unit =
+  println(header)
+  constraints.toList.sortBy(_.ordinal).foreach(println)
+  println()

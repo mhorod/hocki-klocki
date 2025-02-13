@@ -36,11 +36,11 @@ def runPipeline
             try inferTypes(tree, names)
             catch
               case e: StackOverflowError =>
-                writeToFile("typing poszedł w buraki", filename)
+                writeToFile("infinite recursion (typing poszedł w buraki)", filename)
                 return false
               case e: Exception =>
                 println(e)
-                writeToFile("<typing error>", filename)
+                writeToFile(e.getMessage, filename)
                 return false
           val typingPresentation = presentTyping(typing)
           writeToFile(typingPresentation, filename)
