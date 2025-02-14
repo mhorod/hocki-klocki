@@ -11,7 +11,7 @@ def presentTyping(typing: Map[SchemaBinding, SchemaTy]): String =
       ty
         .constraints
         .toList
-        .sortBy(_.toString)
+        .sortBy(_.ordinal)
         .map(constraint => s"    $constraint")
         .mkString("\n")
     s"${schema.id} : [$ins | $outs]\n$constraints"

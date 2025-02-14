@@ -127,7 +127,7 @@ private def inferTypeFromConstraints
 
   presentConstraints(s"Constraints from schemata used within ${environment.id}:", constraints)
 
-  val inductions = inferInductions(constraints)
+  val inductions = inferInductions(constraints, edges)
   val dependencies = inferDependencies(getConstraints[DependsOnAll](constraints), inductions)
   val notIns = inferNotIns(getConstraints[NotIn](constraints), inductions)
   val inUnions =
@@ -305,8 +305,10 @@ private def propagateInUnionsUp(inUnions: Set[InUnion], inductions: Map[DimSetVa
   )
     .map[InUnion]((dim, union) => InUnion(dim, union))
 
-private def inferInductions(constraints: Set[Constraint]): Map[DimSetVar, InducedBy] =
-  val inductions = getConstraints[InducedBy](constraints)
+private def inferInductions(constraints: Set[Constraint], edges: Set[Edge]): Map[DimSetVar, InducedBy] =
+  val withEdges = getConstraints[InducedBy](constraints)
+    ++ edges.map(e => e._2 inducedBy Set(e._1 without Set()))
+  val inductions = withEdges
     .groupBy(_.induced)
     .map((k, v) => k -> unionInductions(v))
     .to(mutable.Map)
@@ -363,16 +365,11 @@ private def coalescing
   edges: Set[Edge],
 )
 : (Map[DimSetVar, DimSetVar], Map[DimSetVar, DimSetVar]) =
-  val inSet = ins.toSet
-  val outSet = outs.toSet
-  val coalescence = outs.zip(outs).toMap ++ (
-    edges
-      .filterNot(e => inSet.contains(e._1) && outSet.contains(e._2))
-      .map(_.swap)
-      ++ edges.map(e => (e(0), e(0)))
-    ).toMap
-  val unCoalescence = (ins.map(v => v -> v) ++ outs.map(v => coalescence(v) -> v)).toMap
-  (coalescence, unCoalescence)
+  val coalescence =
+    edges.flatMap(e => Set(e._1 -> e._1, e._2 -> e._2)).toMap
+    ++ ins.map(v => v -> v).toMap
+    ++ outs.map(v => v -> v).toMap
+  (coalescence, coalescence)
 
 private def getImmediateConstraints(ins: List[DimSetVar], outs: List[DimSetVar], edges: Set[Edge]): Set[Constraint] =
   val inSet = ins.toSet
