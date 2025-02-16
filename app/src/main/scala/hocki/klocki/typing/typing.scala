@@ -125,10 +125,11 @@ private def inferTypeFromConstraints
   constraints.foreach(println)
   println()
 
+  val direct_inductions = getConstraints[InducedBy](constraints)
   val inductions = inferInductions(constraints)
 
   val ins = inferIns(getConstraints[In](constraints), inductions.values.toSet)
-  val notIns = inferNotIns(getConstraints[NotIn](constraints), inductions)
+  val notIns = inferNotIns(getConstraints[NotIn](constraints), inductions, direct_inductions)
   val inUnions =
     pruneUnions(
       inferInUnions(
@@ -185,9 +186,9 @@ private def inferTypeFromConstraints
 private def inferIns(ins: Set[In], inductions: Set[InducedBy]): Set[In] =
   ins ++ propagateInsDown(ins, inductions)
 
-private def inferNotIns(notIns: Set[NotIn], inductions: Map[DimSetVar, InducedBy]): Set[NotIn] =
+private def inferNotIns(notIns: Set[NotIn], inductions: Map[DimSetVar, InducedBy], direct_inductions: Set[InducedBy]): Set[NotIn] =
   val inferred = notIns ++ propagateNotInsUp(notIns, inductions)
-  inferred ++ propagateNotInsDown(inferred, inductions)
+  inferred ++ propagateNotInsDown(inferred, direct_inductions)
 
 private def inferInUnions(inUnions: Set[InUnion], inductions: Map[DimSetVar, InducedBy], notIns: Set[NotIn]): Set[InUnion] =
   inUnions ++ propagateInUnionsUp(inUnions, inductions, notIns)
@@ -218,19 +219,15 @@ private def propagateNotInsUp(notIns: Set[NotIn], inductions: Map[DimSetVar, Ind
         .map[NotIn](inducer => NotIn(notIn.dim, inducer.dimSetVar))
   )
 
-private def propagateNotInsDown(notIns: Set[NotIn], inductions: Map[DimSetVar, InducedBy]): Set[NotIn] = {
+private def propagateNotInsDown(notIns: Set[NotIn], direct_inductions: Set[InducedBy]): Set[NotIn] = {
   val dims = notIns.map(_.dim).toSet
   val inferredNotIns = notIns.to(mutable.Set)
   var size = -1
   while size != inferredNotIns.size do
     size = inferredNotIns.size
-    // for each induction Y <= {X1 \ A1, ... }
+    // for each direct induction Y <= {X1 \ A1, ... }
     // a \notin Y if a \notin all X_i and a \notin all A_i
-    println(inferredNotIns)
-    println(inductions)
-    for dim <- dims; induction <- inductions.values do
-      println(dim)
-      println(induction)
+    for dim <- dims; induction <- direct_inductions do
       if induction.inducers.forall(
         inducer => !inducer.filteredDimensions.contains(dim)
           && inferredNotIns.contains(dim notIn inducer.dimSetVar)) then
