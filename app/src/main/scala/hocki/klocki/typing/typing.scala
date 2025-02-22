@@ -125,10 +125,11 @@ private def inferTypeFromConstraints
   constraints.foreach(println)
   println()
 
+  val direct_inductions = getConstraints[InducedBy](constraints)
   val inductions = inferInductions(constraints)
 
   val ins = inferIns(getConstraints[In](constraints), inductions.values.toSet)
-  val notIns = inferNotIns(getConstraints[NotIn](constraints), inductions)
+  val notIns = inferNotIns(getConstraints[NotIn](constraints), inductions, direct_inductions)
   val inUnions =
     pruneUnions(
       inferInUnions(
@@ -147,7 +148,7 @@ private def inferTypeFromConstraints
   inUnions.foreach(println)
 
   ins.foreach(
-    in => if notIns.contains(NotIn(in.dim,in.dimSetVar)) then
+    in => if notIns.contains(NotIn(in.dim, in.dimSetVar)) then
       throw IllegalStateException(s"in / not in clash: $in")
   )
 
@@ -185,8 +186,9 @@ private def inferTypeFromConstraints
 private def inferIns(ins: Set[In], inductions: Set[InducedBy]): Set[In] =
   ins ++ propagateInsDown(ins, inductions)
 
-private def inferNotIns(notIns: Set[NotIn], inductions: Map[DimSetVar, InducedBy]): Set[NotIn] =
-  notIns ++ propagateNotInsUp(notIns, inductions)
+private def inferNotIns(notIns: Set[NotIn], inductions: Map[DimSetVar, InducedBy], direct_inductions: Set[InducedBy]): Set[NotIn] =
+  val inferred = notIns ++ propagateNotInsUp(notIns, inductions)
+  inferred ++ propagateNotInsDown(inferred, direct_inductions)
 
 private def inferInUnions(inUnions: Set[InUnion], inductions: Map[DimSetVar, InducedBy], notIns: Set[NotIn]): Set[InUnion] =
   inUnions ++ propagateInUnionsUp(inUnions, inductions, notIns)
@@ -203,6 +205,7 @@ private def propagateInsDown(ins: Set[In], inductions: Set[InducedBy]): Set[In] 
       .map[In](i => In(in.dim, i.induced))
   )
 
+
 private def isNotSatisfied(inUnion: InUnion, ins: Set[In]): Boolean =
   !inUnion.union.exists(dsv => ins.contains(In(inUnion.dim, dsv)))
 
@@ -216,24 +219,41 @@ private def propagateNotInsUp(notIns: Set[NotIn], inductions: Map[DimSetVar, Ind
         .map[NotIn](inducer => NotIn(notIn.dim, inducer.dimSetVar))
   )
 
+private def propagateNotInsDown(notIns: Set[NotIn], direct_inductions: Set[InducedBy]): Set[NotIn] = {
+  val dims = notIns.map(_.dim).toSet
+  val inferredNotIns = notIns.to(mutable.Set)
+  var size = -1
+  while size != inferredNotIns.size do
+    size = inferredNotIns.size
+    // for each direct induction Y <= {X1 \ A1, ... }
+    // a \notin Y if a \notin all X_i and a \notin all A_i
+    for dim <- dims; induction <- direct_inductions do
+      if induction.inducers.forall(
+        inducer => !inducer.filteredDimensions.contains(dim)
+          && inferredNotIns.contains(dim notIn inducer.dimSetVar)) then
+        inferredNotIns.add(dim notIn induction.induced)
+
+  inferredNotIns.toSet
+}
+
 private def propagateInUnionsUp(inUnions: Set[InUnion], inductions: Map[DimSetVar, InducedBy], notIns: Set[NotIn]): Set[InUnion] =
   inUnions.map(
-    inUnion => (
-      inUnion.dim,
-      inUnion
-        .union
-        .flatMap(
-          elem =>
-            inductions
-              .get(elem)
-              .map(_.inducers)
-              .getOrElse(Set(elem without Set()))
-              .filter(inducer => !inducer.filteredDimensions.contains(inUnion.dim))
-              .map(_.dimSetVar)
-        )
-        .filter(dimSetVar => !notIns.contains(inUnion.dim notIn dimSetVar))
+      inUnion => (
+        inUnion.dim,
+        inUnion
+          .union
+          .flatMap(
+            elem =>
+              inductions
+                .get(elem)
+                .map(_.inducers)
+                .getOrElse(Set(elem without Set()))
+                .filter(inducer => !inducer.filteredDimensions.contains(inUnion.dim))
+                .map(_.dimSetVar)
+          )
+          .filter(dimSetVar => !notIns.contains(inUnion.dim notIn dimSetVar))
+      )
     )
-  )
     .map[InUnion]((dim, union) => InUnion(dim, union))
 
 private def pruneUnions(inUnions: Set[InUnion], ins: Set[In]): Set[InUnion] =

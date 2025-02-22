@@ -1,0 +1,14 @@
+def f = [X | Y] link X >-> Y
+
+def main = [X|]
+  use f [X | Y] as F1
+  use f [X | Y] as F2
+  use -a [X | Y] as A
+  use U{2} [X1, X2 | Y] as U
+  link
+    F1.Y >-> A.X,
+    A.Y >-> U.X2,
+    U.Y >-> F2.X
+    F2.Y >-> F1.X,
+    X >-> U.X1,
+
