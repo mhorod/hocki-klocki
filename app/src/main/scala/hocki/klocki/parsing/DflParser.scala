@@ -1,6 +1,7 @@
 package hocki.klocki.parsing
 
-import hocki.klocki.ast.{Abstra, BlockId, BuiltinSchema, ConnectionDecl, IfaceBinding, Link, SchemaBinding, SchemaExpr, SchemaId, Statement, Toplevel, VertexBinding, VertexId, VertexRef, VertexUse}
+import hocki.klocki.ast.Statement.LocalExistentialDim
+import hocki.klocki.ast.{Abstra, BlockId, BuiltinSchema, ConnectionDecl, DimArgs, DimBinding, DimId, DimParams, DimRef, GlobalDim, IfaceBinding, Link, SchemaBinding, SchemaExpr, SchemaId, Statement, Toplevel, ToplevelStatement, VertexBinding, VertexId, VertexRef, VertexUse}
 import hocki.klocki.entities.Dim
 
 import scala.util.parsing.combinator.RegexParsers
@@ -8,23 +9,33 @@ import scala.util.parsing.combinator.RegexParsers
 object DflParser extends RegexParsers:
   def program: Parser[Toplevel] = phrase(toplevel)
 
-  private def toplevel: Parser[Toplevel] = rep(statement) ~ opt(link) ^^ {
+  private def toplevel: Parser[Toplevel] = rep(toplevelStatement) ~ opt(link) ^^ {
     case statements ~ link => Toplevel(statements, link)
   }
 
   // Statement
 
-  private def statement: Parser[Statement] = schemaDef | blockUse
+  private def toplevelStatement: Parser[ToplevelStatement] = globalDim | statement
+  
+  private def statement: Parser[Statement] = schemaDef | blockUse | localExistentialDim
 
+  private def globalDim: Parser[GlobalDim] = ("global" ~> dimBinding) ~ opt("depends on" ~> dimRefList) ^^ {
+    case dimBinding ~ dimRefList => GlobalDim(dimBinding, dimRefList.getOrElse(List()))
+  }
+  
   private def schemaDef: Parser[Statement.SchemaDef] =
-    ("def" ~> schemaId) ~ ("=" ~> abstra) ^^ {
-      case schemaId ~ abstra => Statement.SchemaDef(SchemaBinding(schemaId), abstra)
+    ("def" ~> schemaId) ~ ("=" ~> (opt(dimParams) ~ abstra)) ^^ {
+      case schemaId ~ (dimParams ~ abstra) =>
+        Statement.SchemaDef(SchemaBinding(schemaId), dimParams.getOrElse(DimParams.empty), abstra)
     }
 
   private def blockUse: Parser[Statement.BlockUse] =
     ("use" ~> schemaExpr) ~ externalIfaceBinding ~ opt("as" ~> blockId) ^^ {
       case expr ~ ifaceDef ~ blockId => Statement.BlockUse(expr, ifaceDef, blockId)
     }
+
+  private def localExistentialDim: Parser[Statement.LocalExistentialDim] =
+    ("exists" ~> dimBinding) ^^ { LocalExistentialDim(_) }
 
   // Iface
 
@@ -50,8 +61,8 @@ object DflParser extends RegexParsers:
 
   private def schemaExpr: Parser[SchemaExpr] = primitive | schemaRef | app
 
-  private def schemaRef: Parser[SchemaExpr.SchemaRef] = schemaId ^^ {
-    SchemaExpr.SchemaRef(_)
+  private def schemaRef: Parser[SchemaExpr.SchemaRef] = schemaId ~ opt(dimArgs) ^^ {
+    case schemaId ~ dimArgs => SchemaExpr.SchemaRef(schemaId, dimArgs.getOrElse(DimArgs.empty))
   }
 
   private def app: Parser[SchemaExpr.App] = parenthesized(schemaExpr ~ schemaExpr) ^^ {
@@ -64,23 +75,39 @@ object DflParser extends RegexParsers:
 
   // Builtin
 
-  private def builtinSchema: Parser[BuiltinSchema] = union | add | remove
+  private def builtinSchema: Parser[BuiltinSchema] =
+    builtinUnion | builtinAddNamed | builtinAddExistential | builtinRemove
 
-  private def union: Parser[BuiltinSchema.Union] = "U" ~> braced(naturalNumber) ^^ {
+  private def builtinUnion: Parser[BuiltinSchema.Union] = "U" ~> braced(naturalNumber) ^^ {
     BuiltinSchema.Union(_)
   }
 
-  private def add: Parser[BuiltinSchema.Add] = "+" ~> dim ^^ {
-    BuiltinSchema.Add(_)
+  private def builtinAddNamed: Parser[BuiltinSchema.AddNamed] = "+" ~> dimRef ^^ { BuiltinSchema.AddNamed(_) }
+
+  private def builtinAddExistential: Parser[BuiltinSchema.AddExistential] = "*" ~> dimRef ^^ {
+    BuiltinSchema.AddExistential(_)
   }
 
-  private def remove: Parser[BuiltinSchema.Remove] = "-" ~> dim ^^ {
-    BuiltinSchema.Remove(_)
+  private def builtinRemove: Parser[BuiltinSchema.Remove] = "-" ~> dimRef ^^ { BuiltinSchema.Remove(_) }
+  
+  private def dimArgs: Parser[DimArgs] = dimRefList ~ ("|" ~> dimRefList) ^^ {
+    case universals ~ existentials => DimArgs(universals, existentials)
   }
+
+  private def dimRef: Parser[DimRef] = dimId ^^ { DimRef(_) }
+  
+  private def dimRefList: Parser[List[DimRef]] = repsep(dimRef, ",")
 
   // Abstra
-
   private def abstra: Parser[Abstra] = onIface | onSchema
+
+  private def dimParams: Parser[DimParams] = angleBracketed(dimBindingList ~ ("|" ~> dimBindingList)) ^^ {
+    case universals ~ existentials => DimParams(universals, existentials)
+  }
+
+  private def dimBindingList: Parser[List[DimBinding]] = repsep(dimBinding, ",")
+
+  private def dimBinding: Parser[DimBinding] = dimId ^^ { DimBinding(_) }
 
   private def onIface: Parser[Abstra.OnIface] = internalIfaceBinding ~ rep(statement) ~ link ^^ {
     case iface ~ body ~ link => Abstra.OnIface(iface, body, link)
@@ -133,9 +160,9 @@ object DflParser extends RegexParsers:
       BlockId(_)
     }
 
-  private def dim: Parser[Dim] =
+  private def dimId: Parser[DimId] =
     """[a-z][a-zA-Z0-9_]*""".r ^^ {
-      Dim(_)
+      DimId(_)
     }
 
   private def naturalNumber: Parser[Int] =
@@ -152,3 +179,5 @@ object DflParser extends RegexParsers:
   private def bracketed[T](inner: Parser[T]): Parser[T] = delimited("[", inner, "]")
 
   private def braced[T](inner: Parser[T]): Parser[T] = delimited("{", inner, "}")
+
+  private def angleBracketed[T](inner: Parser[T]): Parser[T] = delimited("<", inner, ">")

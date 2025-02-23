@@ -5,7 +5,7 @@ import hocki.klocki.utils.{Tree, toParenthesesString}
 sealed trait AstNode extends Tree:
   override def children: List[AstNode]
 
-class Toplevel(val statements: List[Statement], val link: Option[Link]) extends AstNode:
+class Toplevel(val statements: List[ToplevelStatement], val link: Option[Link]) extends AstNode:
   override def children: List[AstNode] = statements ++ link
 
   override def toString: String = "toplevel"
@@ -23,18 +23,30 @@ object Abstra:
 
     override def toString: String = binding.toString
 
-sealed trait Statement extends AstNode
+sealed trait ToplevelStatement extends AstNode
+
+class GlobalDim(val binding: DimBinding, val dependsOn: List[DimRef]) extends ToplevelStatement:
+  override def children: List[AstNode] = List()
+
+  override def toString: String = s"global $binding depends on $dependsOn}"
+
+sealed trait Statement extends ToplevelStatement
 
 object Statement:
-  class SchemaDef(val binding: SchemaBinding, val impl: Abstra) extends Statement:
+  class SchemaDef(val binding: SchemaBinding, val params: DimParams, val impl: Abstra) extends Statement:
     override def children: List[Abstra] = List(impl)
 
-    override def toString: String = s"def ${binding} ="
+    override def toString: String = s"def $binding ="
 
   class BlockUse(val expr: SchemaExpr, val iface: IfaceBinding.External, val name: Option[BlockId]) extends Statement:
     override def children: List[Nothing] = List()
 
     override def toString: String = s"use ${expr.toParenthesesString} $iface"
+
+  class LocalExistentialDim(val binding: DimBinding) extends Statement:
+    override def children: List[AstNode] = List()
+
+    override def toString: String = s"exists $binding"
 
 sealed abstract class VertexUse(val ref: VertexRef) extends AstNode:
   override def children: List[Nothing] = List()

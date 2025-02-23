@@ -4,26 +4,28 @@ import hocki.klocki.ast.SchemaExpr.{Primitive, SchemaRef}
 import hocki.klocki.ast.Statement.SchemaDef
 
 import scala.collection.mutable
-import hocki.klocki.ast.{Abstra, AstNode, BlockId, ConnectionDecl, Link, SchemaBinding, SchemaExpr, SchemaId, Statement, Toplevel, VertexBinding, VertexId, VertexRef, VertexUse}
+import hocki.klocki.ast.{Abstra, AstNode, BlockId, ConnectionDecl, DimBinding, DimRef, Link, SchemaBinding, SchemaExpr, SchemaId, Statement, Toplevel, VertexBinding, VertexId, VertexRef, VertexUse}
 
 import scala.annotation.targetName
 
 class ResolvedNames
 (
   val vertexNames: Map[VertexUse, VertexBinding],
-  val schemaNames: Map[SchemaRef, SchemaBinding]
+  val schemaNames: Map[SchemaRef, SchemaBinding],
+  val dimNames: Map[DimRef, DimBinding]
 )
 
 class MutableResolvedNames
 (
   val vertexNames: mutable.Map[VertexUse, VertexBinding],
-  val schemaNames: mutable.Map[SchemaRef, SchemaBinding]
+  val schemaNames: mutable.Map[SchemaRef, SchemaBinding],
+  val dimNames: mutable.Map[DimRef, DimBinding]
 ):
-  def toResolvedNames: ResolvedNames = ResolvedNames(vertexNames.toMap, schemaNames.toMap)
+  def toResolvedNames: ResolvedNames = ResolvedNames(vertexNames.toMap, schemaNames.toMap, dimNames.toMap)
 
 
 def resolveNames(ast: Toplevel): ResolvedNames =
-  val resolved = MutableResolvedNames(mutable.Map(), mutable.Map())
+  val resolved = MutableResolvedNames(mutable.Map(), mutable.Map(), mutable.Map())
   resolveNames(ast, Context(Map(), Map(), Map()))(using resolved)
   resolved.toResolvedNames
 
