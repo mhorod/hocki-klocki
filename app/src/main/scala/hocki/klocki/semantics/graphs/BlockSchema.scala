@@ -1,7 +1,6 @@
 package hocki.klocki.semantics.graphs
 
-import hocki.klocki.entities.DimSetVar
-import hocki.klocki.names.NameGenerator
+import hocki.klocki.entities.{Dim, DimSetVar}
 
 class BlockSchemaId
 
@@ -9,16 +8,13 @@ class BlockSchema
 (
   val id: BlockSchemaId,
   val name: String,
+  val universalDims: List[Dim],
+  val existentialDims: List[Dim],
   val inVertices: List[DimSetVar],
   val outVertices: List[DimSetVar],
   val blocks: Set[Block],
   val edges: Set[(DimSetVar, DimSetVar)],
-):
-  def instantiate(using gen: NameGenerator): Block =
-    Block(
-      this.id,
-      inVertices.map(_ -> gen.freshInDimSetVar()).toMap ++ outVertices.map(_ -> gen.freshOutDimSetVar()).toMap
-    )
+)
 
 def schemaToString(schema: BlockSchema): String =
   val inVertices = schema.inVertices.map(_.name).mkString(", ")

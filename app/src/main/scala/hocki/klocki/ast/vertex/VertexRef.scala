@@ -1,4 +1,6 @@
-package hocki.klocki.ast
+package hocki.klocki.ast.vertex
+
+import hocki.klocki.ast.vertex.{BlockId, VertexId}
 
 enum VertexRef:
   case Plain(vertexId: VertexId)

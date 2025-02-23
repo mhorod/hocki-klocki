@@ -1,7 +1,11 @@
 package hocki.klocki.parsing
 
+import hocki.klocki.ast.schema.SchemaRef.Builtin
 import hocki.klocki.ast.Statement.LocalExistentialDim
-import hocki.klocki.ast.{Abstra, BlockId, BuiltinSchema, ConnectionDecl, DimArgs, DimBinding, DimId, DimParams, DimRef, GlobalDim, IfaceBinding, Link, SchemaBinding, SchemaExpr, SchemaId, Statement, Toplevel, ToplevelStatement, VertexBinding, VertexId, VertexRef, VertexUse}
+import hocki.klocki.ast.dim.{DimArgs, DimBinding, DimId, DimParams, DimRef}
+import hocki.klocki.ast.schema.{Primitive, IfaceBinding, SchemaBinding, SchemaExpr, SchemaId, SchemaRef}
+import hocki.klocki.ast.vertex.{BlockId, VertexBinding, VertexId, VertexRef}
+import hocki.klocki.ast.{Abstra, ConnectionDecl, GlobalDim, Link, Statement, Toplevel, ToplevelStatement, VertexUse}
 import hocki.klocki.entities.Dim
 
 import scala.util.parsing.combinator.RegexParsers
@@ -59,38 +63,44 @@ object DflParser extends RegexParsers:
 
   // SchemaExpr
 
-  private def schemaExpr: Parser[SchemaExpr] = primitive | schemaRef | app
+  private def schemaExpr: Parser[SchemaExpr] = schemaExprLeaf | app
 
-  private def schemaRef: Parser[SchemaExpr.SchemaRef] = schemaId ~ opt(dimArgs) ^^ {
-    case schemaId ~ dimArgs => SchemaExpr.SchemaRef(schemaId, dimArgs.getOrElse(DimArgs.empty))
+  private def schemaExprLeaf: Parser[SchemaExpr.Leaf] = primitiveSchemaRef | namedSchemaRef
+
+  private def namedSchemaRef: Parser[SchemaExpr.Leaf] = schemaId ~ opt(dimArgs) ^^ {
+    case schemaId ~ dimArgs => SchemaExpr.Leaf(SchemaRef.Named(schemaId), dimArgs.getOrElse(DimArgs.empty))
   }
 
   private def app: Parser[SchemaExpr.App] = parenthesized(schemaExpr ~ schemaExpr) ^^ {
     case left ~ right => SchemaExpr.App(left, right)
   }
 
-  private def primitive: Parser[SchemaExpr.Primitive] = builtinSchema ^^ {
-    SchemaExpr.Primitive(_)
+  private def primitiveSchemaRef: Parser[SchemaExpr.Leaf] = builtinSchema ^^ {
+    (schema, args) => SchemaExpr.Leaf(Builtin(schema), args)
   }
 
   // Builtin
 
-  private def builtinSchema: Parser[BuiltinSchema] =
+  private def builtinSchema: Parser[(Primitive, DimArgs)] =
     builtinUnion | builtinAddNamed | builtinAddExistential | builtinRemove
 
-  private def builtinUnion: Parser[BuiltinSchema.Union] = "U" ~> braced(naturalNumber) ^^ {
-    BuiltinSchema.Union(_)
+  private def builtinUnion: Parser[(Primitive.Union, DimArgs)] = "U" ~> braced(naturalNumber) ^^ {
+    arity => (Primitive.Union(arity), DimArgs.empty)
   }
 
-  private def builtinAddNamed: Parser[BuiltinSchema.AddNamed] = "+" ~> dimRef ^^ { BuiltinSchema.AddNamed(_) }
-
-  private def builtinAddExistential: Parser[BuiltinSchema.AddExistential] = "*" ~> dimRef ^^ {
-    BuiltinSchema.AddExistential(_)
+  private def builtinAddNamed: Parser[(Primitive.AddNamed, DimArgs)] = "+" ~> dimRef ^^ {
+    ref => (Primitive.AddNamed(ref), DimArgs.empty)
   }
 
-  private def builtinRemove: Parser[BuiltinSchema.Remove] = "-" ~> dimRef ^^ { BuiltinSchema.Remove(_) }
+  private def builtinAddExistential: Parser[(Primitive.AddExistential, DimArgs)] = "*" ~> dimRef ^^ {
+    ref => (Primitive.AddExistential(), DimArgs(List(), List(ref)))
+  }
+
+  private def builtinRemove: Parser[(Primitive.Remove, DimArgs)] = "-" ~> dimRef ^^ {
+    ref => (Primitive.Remove(), DimArgs(List(ref), List()))
+  }
   
-  private def dimArgs: Parser[DimArgs] = dimRefList ~ ("|" ~> dimRefList) ^^ {
+  private def dimArgs: Parser[DimArgs] = angleBracketed(dimRefList ~ ("|" ~> dimRefList)) ^^ {
     case universals ~ existentials => DimArgs(universals, existentials)
   }
 

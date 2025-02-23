@@ -1,5 +1,8 @@
 package hocki.klocki.ast
 
+import hocki.klocki.ast.dim.{DimBinding, DimParams, DimRef}
+import hocki.klocki.ast.schema.{IfaceBinding, SchemaBinding, SchemaExpr}
+import hocki.klocki.ast.vertex.{BlockId, VertexRef}
 import hocki.klocki.utils.{Tree, toParenthesesString}
 
 sealed trait AstNode extends Tree:

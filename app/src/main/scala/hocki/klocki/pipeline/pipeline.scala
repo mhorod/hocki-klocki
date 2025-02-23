@@ -1,7 +1,8 @@
 package hocki.klocki.pipeline
 
 import hocki.klocki.analysis.resolveNames
-import hocki.klocki.ast.{SchemaBinding, Toplevel}
+import hocki.klocki.ast.Toplevel
+import hocki.klocki.ast.schema.SchemaBinding
 import hocki.klocki.parsing.DflParser
 import hocki.klocki.semantics.graphs.buildGraph
 import hocki.klocki.typing.{SchemaTy, inferTypes}
@@ -23,7 +24,8 @@ def runPipeline
       val names =
         try resolveNames(tree)
         catch case e: Exception =>
-          println("Name resolution error")
+          println(s"Name resolution error: ${e}")
+          e.printStackTrace()
           return false
 
       val graph = buildGraph(tree, names)

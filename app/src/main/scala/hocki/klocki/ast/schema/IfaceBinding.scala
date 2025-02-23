@@ -1,4 +1,7 @@
-package hocki.klocki.ast
+package hocki.klocki.ast.schema
+
+import hocki.klocki.ast.schema.IfaceBinding
+import hocki.klocki.ast.vertex.VertexBinding
 
 sealed abstract class IfaceBinding(val suppliers: List[VertexBinding.Supplier], val consumers: List[VertexBinding.Consumer]):
   final def suppliersToString: String = suppliers.mkString(", ")

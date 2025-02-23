@@ -1,0 +1,28 @@
+def g = <x, y, z | u, v, w> [X | Y]
+    use -x [X | Y] as RemX
+    use -y [X | Y] as RemY
+    use -z [X | Y] as RemZ
+    use *u [X | Y] as NewU
+    use *v [X | Y] as NewV
+    use *w [X | Y] as NewW
+    link
+        X >-> RemX.X,
+        RemX.Y >-> RemY.X,
+        RemY.Y >-> RemZ.X,
+        RemZ.Y >-> NewU.X,
+        NewU.Y >-> NewV.X,
+        NewV.Y >-> NewW.X,
+        NewW.Y >-> Y
+
+global a
+global b
+global c
+
+def main = [X | Y]
+    exists uu
+    exists vv
+    exists ww
+    use g<a, b, c | uu, vv, ww> [X | Y] as G
+    link
+        X >-> G.X,
+        G.Y >-> Y

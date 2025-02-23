@@ -1,8 +1,10 @@
 package hocki.klocki.typing
 
 import hocki.klocki.analysis.ResolvedNames
-import hocki.klocki.ast.{Abstra, BuiltinSchema, SchemaBinding, SchemaExpr, Statement, Toplevel}
-import hocki.klocki.entities.{DimSetVar, Edge}
+import hocki.klocki.ast.Statement.{LocalExistentialDim, SchemaDef}
+import hocki.klocki.ast.schema.{Primitive, SchemaBinding, SchemaExpr, SchemaRef}
+import hocki.klocki.ast.{Abstra, Statement, Toplevel}
+import hocki.klocki.entities.{Dim, DimSetVar, Edge}
 import hocki.klocki.typing.Constraint.{In, InUnion, InducedBy, NotIn}
 
 import scala.collection.immutable
@@ -18,26 +20,23 @@ def inferTypes(toplevel: Toplevel, nr: ResolvedNames): Map[SchemaBinding, Schema
 
   val schemaDefs = toplevel.statements.collect { case schemaDef: Statement.SchemaDef => schemaDef }
   val bindings =
-    schemaDefs.map[(SchemaBinding, Abstra.OnIface)](schemaDef =>
-      schemaDef.binding -> (
-        schemaDef.impl match
-          case onIface: Abstra.OnIface => onIface
-          case _: Abstra.OnSchema => throw IllegalStateException("Rank 1+ definitions verboten")
-        )
-    ).toMap
+    schemaDefs.map[(SchemaBinding, SchemaDef)](schemaDef => schemaDef.binding -> schemaDef).toMap
 
-  given Map[SchemaBinding, Abstra.OnIface] = bindings
+  given Map[SchemaBinding, SchemaDef] = bindings
 
   schemaDefs.foreach(schemaDef => inferTypeFor(schemaDef.binding))
   typing.toMap
 
 private def inferTypeFor
 (schema: SchemaBinding)
-(using nr: ResolvedNames, typing: mutable.Map[SchemaBinding, SchemaTy], impls: Map[SchemaBinding, Abstra.OnIface])
+(using nr: ResolvedNames, typing: mutable.Map[SchemaBinding, SchemaTy], schemaDefs: Map[SchemaBinding, SchemaDef])
 : Unit =
   if typing.contains(schema) then
     return
-  val impl = impls(schema)
+  val schemaDef = schemaDefs(schema)
+  val impl: Abstra.OnIface = schemaDef.impl match
+    case onIface: Abstra.OnIface => onIface
+    case _ => throw RuntimeException("Rank 1+ definitions verboten")
   val ins = impl.iface.suppliers.map(binding => DimSetVar(binding.id.toString))
   val outs = impl.iface.consumers.map(binding => DimSetVar(binding.id.toString))
   val blocks =
@@ -54,9 +53,20 @@ private def inferTypeFor
           val blockIns = use.iface.consumers.map(binding => DimSetVar(s"$blockName.${binding.id}"))
           val blockOuts = use.iface.suppliers.map(binding => DimSetVar(s"$blockName.${binding.id}"))
           val freshMapping = (ty.ins.zip(blockIns) ++ ty.outs.zip(blockOuts)).toMap
+          val dimMapping = use.expr match
+            case ref: SchemaExpr.Leaf =>
+              if ref.dimArgs.universals.size != ty.universalDims.size then
+                throw IllegalStateException("Wrong number of universal dim arguments")
+              if ref.dimArgs.existentials.size != ty.existentialDims.size then
+                throw IllegalStateException("Wrong number of existential dim arguments")
+              (ty.universalDims.zip(ref.dimArgs.universals) ++ ty.existentialDims.zip(ref.dimArgs.existentials))
+                .map((inType, inRef) => inType -> Dim(inRef.dimId.name))
+                .toMap
+            case app: SchemaExpr.App => throw IllegalStateException("Rank 1+ uses verboten")
           val constraints = ty.constraints.map(_.map(freshMapping))
           (use.iface.allVerticesInOrder.zip(blockIns ++ blockOuts).toMap, constraints)
         case schemaDef: Statement.SchemaDef => throw IllegalStateException("Nested defs verboten")
+        case _: LocalExistentialDim => (Map(), Set()) // Do nothing
       }
       .toSet
   val bindingsToDimSetVars = impl.iface.allVerticesInOrder.zip(ins ++ outs).toMap ++ blocks.flatMap(_._1)
@@ -75,39 +85,53 @@ private def inferTypeFor
 
 private def getTypeOf
 (expr: SchemaExpr)
-(using nr: ResolvedNames, typing: mutable.Map[SchemaBinding, SchemaTy], impls: Map[SchemaBinding, Abstra.OnIface]): SchemaTy =
+(using nr: ResolvedNames, typing: mutable.Map[SchemaBinding, SchemaTy], schemaDefs: Map[SchemaBinding, SchemaDef]): SchemaTy =
   expr match
-    case primitive: SchemaExpr.Primitive =>
-      primitive.builtin match
-        case BuiltinSchema.Union(arity) =>
-          val xs = (0 until arity).map(i => DimSetVar(s"X$i")).toList
-          val y = DimSetVar("Y")
-          val constraint = y inducedBy xs.toSet.map(_ without Set())
-          SchemaTy(xs, List(y), Set(constraint))
-        case BuiltinSchema.Add(dim) =>
-          val x = DimSetVar("X")
-          val y = DimSetVar("Y")
-          val constraints = Set(
-            dim notIn x,
-            dim in y,
-            // dim dependsOn (x without Set(dim)),
-            y inducedBy Set(x without Set(dim)),
-          )
-          SchemaTy(List(x), List(y), constraints)
-        case BuiltinSchema.Remove(dim) =>
-          val x = DimSetVar("X")
-          val y = DimSetVar("Y")
-          val constraints = Set(
-            dim notIn y,
-            dim inUnion Set(x),
-            y inducedBy Set(x without Set(dim))
-          )
-          SchemaTy(List(x), List(y), constraints)
-    case ref: SchemaExpr.SchemaRef =>
-      val binding = nr.schemaNames(ref)
-      inferTypeFor(binding)
-      typing(binding)
+    case leaf: SchemaExpr.Leaf =>
+      leaf.schemaRef match
+        case named: SchemaRef.Named =>
+          val binding = nr.schemaNames(named)
+          inferTypeFor(binding)
+          typing(binding)
+        case builtin: SchemaRef.Builtin => getTypeOfPrimitive(builtin.primitive)
     case app: SchemaExpr.App => throw IllegalStateException("Rank 1+ usages verboten")
+
+private def getTypeOfPrimitive(primitive: Primitive): SchemaTy = primitive match
+  case Primitive.Union(arity) =>
+    val xs = (0 until arity).map(i => DimSetVar(s"X$i")).toList
+    val y = DimSetVar("Y")
+    val constraint = y inducedBy xs.toSet.map(_ without Set())
+    SchemaTy(List(), List(), xs, List(y), Set(constraint))
+  case Primitive.AddNamed(dimRef) =>
+    val dim = Dim(dimRef.dimId.name)
+    val x = DimSetVar("X")
+    val y = DimSetVar("Y")
+    val constraints = Set[Constraint](
+      dim notIn x,
+      dim in y,
+      x inducedBy Set(y without Set(dim))
+    )
+    SchemaTy(List(), List(), List(x), List(y), constraints)
+  case Primitive.AddExistential() =>
+    val dim = Dim("a")
+    val x = DimSetVar("X")
+    val y = DimSetVar("Y")
+    val constraints = Set[Constraint](
+      dim notIn x,
+      dim in y,
+      x inducedBy Set(y without Set(dim))
+    )
+    SchemaTy(List(), List(dim), List(x), List(y), constraints)
+  case Primitive.Remove() =>
+    val dim = Dim("a")
+    val x = DimSetVar("X")
+    val y = DimSetVar("Y")
+    val constraints = Set[Constraint](
+      dim in x,
+      dim notIn y,
+      x inducedBy Set(y without Set(dim))
+    )
+    SchemaTy(List(dim), List(), List(x), List(y), constraints)
 
 private def inferTypeFromConstraints
 (
@@ -181,7 +205,7 @@ private def inferTypeFromConstraints
   println("Final constraints")
   finalConstraints.foreach(println)
 
-  SchemaTy(inDimSetVars, outDimSetVars, finalConstraints)
+  SchemaTy(List(), List(), inDimSetVars, outDimSetVars, finalConstraints)
 
 private def inferIns(ins: Set[In], inductions: Set[InducedBy]): Set[In] =
   ins ++ propagateInsDown(ins, inductions)
@@ -220,7 +244,7 @@ private def propagateNotInsUp(notIns: Set[NotIn], inductions: Map[DimSetVar, Ind
   )
 
 private def propagateNotInsDown(notIns: Set[NotIn], direct_inductions: Set[InducedBy]): Set[NotIn] = {
-  val dims = notIns.map(_.dim).toSet
+  val dims = notIns.map(_.dim)
   val inferredNotIns = notIns.to(mutable.Set)
   var size = -1
   while size != inferredNotIns.size do

@@ -1,6 +1,6 @@
 package hocki.klocki.visualize
 
-import hocki.klocki.ast.SchemaBinding
+import hocki.klocki.ast.schema.SchemaBinding
 import hocki.klocki.typing.SchemaTy
 
 def presentTyping(typing: Map[SchemaBinding, SchemaTy]): String =
