@@ -17,5 +17,6 @@ def fromAst(schema: BuiltinSchema): BlockSchema =
   val name = schema.toString
   schema match
     case BuiltinSchema.Union(arity) => namedBuiltinSchema(name, arity, 1)
-    case BuiltinSchema.Add(_) => namedBuiltinSchema(name, 1, 1)
+    case BuiltinSchema.AddNamed(_) => namedBuiltinSchema(name, 1, 1)
+    case BuiltinSchema.AddExistential(_) => namedBuiltinSchema(name, 1, 1)
     case BuiltinSchema.Remove(_) => namedBuiltinSchema(name, 1, 1)
