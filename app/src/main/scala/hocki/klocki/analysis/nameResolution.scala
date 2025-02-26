@@ -1,10 +1,8 @@
 package hocki.klocki.analysis
 
-import hocki.klocki.ast.schema.Primitive.Union
-import hocki.klocki.ast.schema.SchemaExpr.{App, Leaf}
 import hocki.klocki.ast.Statement.{LocalExistentialDim, SchemaDef}
 import hocki.klocki.ast.dim.{DimBinding, DimId, DimRef}
-import hocki.klocki.ast.schema.SchemaRef
+
 import hocki.klocki.ast.schema.{Primitive, SchemaBinding, SchemaExpr, SchemaId, SchemaRef}
 import hocki.klocki.ast.vertex.{BlockId, VertexBinding, VertexId, VertexRef}
 
@@ -27,21 +25,32 @@ class ResolvedNames
 (
   val vertexNames: Map[VertexUse, VertexBinding],
   val schemaNames: Map[SchemaRef, SchemaBinding],
-  val dimNames: Map[DimRef, DimBinding]
+  val dimNames: Map[DimRef, DimBinding],
+  val globalDims: Set[DimBinding],
+  val localExistentialDims: Map[SchemaBinding, Set[DimBinding]]
 )
 
 class MutableResolvedNames
 (
   val vertexNames: mutable.Map[VertexUse, VertexBinding],
   val schemaNames: mutable.Map[SchemaRef, SchemaBinding],
-  val dimNames: mutable.Map[DimRef, DimBinding]
+  val dimNames: mutable.Map[DimRef, DimBinding],
+  val globalDims: mutable.Set[DimBinding],
+  val localExistentialDims: mutable.Map[SchemaBinding, mutable.Set[DimBinding]]
 ):
-  def toResolvedNames: ResolvedNames = ResolvedNames(vertexNames.toMap, schemaNames.toMap, dimNames.toMap)
+  def toResolvedNames: ResolvedNames =
+    ResolvedNames(
+      vertexNames.toMap,
+      schemaNames.toMap,
+      dimNames.toMap,
+      globalDims.toSet,
+      localExistentialDims.toMap.map((k, v) => k -> v.toSet),
+    )
 
 
 def resolveNames(ast: Toplevel): ResolvedNames =
-  val resolved = MutableResolvedNames(mutable.Map(), mutable.Map(), mutable.Map())
-  resolveNames(ast, Context(Map(), Map(), Map(), Map()))(using resolved)
+  val resolved = MutableResolvedNames(mutable.Map(), mutable.Map(), mutable.Map(), mutable.Set(), mutable.Map())
+  resolveNames(ast, Context(Map(), Map(), Option.empty, Map(), Map()))(using resolved)
   resolved.toResolvedNames
 
 private def resolveNames(node: AstNode, ctx: Context)(using resolved: MutableResolvedNames): Context =
@@ -55,6 +64,7 @@ private def resolveNames(node: AstNode, ctx: Context)(using resolved: MutableRes
       ctx
     case globalDim: GlobalDim =>
       globalDim.dependsOn.foreach(resolveDim(_, ctx))
+      resolved.globalDims.add(globalDim.binding)
       ctx
     case abstra: Abstra =>
       abstra match
@@ -70,10 +80,12 @@ private def resolveNames(node: AstNode, ctx: Context)(using resolved: MutableRes
     case statement: Statement =>
       statement match
         case schemaDef: Statement.SchemaDef =>
+          resolved.localExistentialDims.put(schemaDef.binding, mutable.Set())
           resolveNames(schemaDef.impl,
             ctx
               .withUniversalDims(schemaDef.params.universals)
-              .withExistentialDims(schemaDef.params.existential)
+              .withExistentialDims(schemaDef.params.existentials)
+              .withCurrentSchema(schemaDef.binding)
           )
           ctx
         case use: Statement.BlockUse =>
@@ -82,7 +94,9 @@ private def resolveNames(node: AstNode, ctx: Context)(using resolved: MutableRes
           use.name match
             case Some(name) => ctx + (name, all)
             case None => ctx + all
-        case _: LocalExistentialDim => ctx // Do nothing here as we add all dims at once
+        case localExistentialDim: LocalExistentialDim =>
+          resolved.localExistentialDims(ctx.currentSchema.get).add(localExistentialDim.binding)
+          ctx
     case use: VertexUse =>
       ctx(use.ref) match
         case Some(binding) => resolved.vertexNames.put(use, binding)
@@ -151,24 +165,27 @@ private class Context
 (
   plain: Map[VertexId, VertexBinding],
   schemata: Map[SchemaId, SchemaBinding],
+  val currentSchema: Option[SchemaBinding],
   scopes: Map[BlockId, Map[VertexId, VertexBinding]],
   dims: Map[DimId, QuantifiedDim]
 ):
 
   @targetName("add")
-  infix def +(bindings: List[VertexBinding]): Context = Context(plain ++ toNameMap(bindings), schemata, scopes, dims)
+  infix def +(bindings: List[VertexBinding]): Context = Context(plain ++ toNameMap(bindings), schemata, currentSchema, scopes, dims)
 
   @targetName("add")
   infix def +(blockAndBindings: (BlockId, List[VertexBinding])): Context =
     val (block, bindings) = blockAndBindings
-    Context(plain, schemata, scopes + (block -> toNameMap(bindings)), dims)
+    Context(plain, schemata, currentSchema, scopes + (block -> toNameMap(bindings)), dims)
 
   @targetName("add")
-  infix def +(binding: SchemaBinding): Context = Context(plain, schemata + (binding.id -> binding), scopes, dims)
+  infix def +(binding: SchemaBinding): Context =
+    Context(plain, schemata + (binding.id -> binding), currentSchema, scopes, dims)
 
   infix def withSchemata(schemaDefs: List[SchemaDef]): Context =
     Context(plain,
       schemata ++ schemaDefs.map(schemaDef => schemaDef.binding.id -> schemaDef.binding).toMap,
+      currentSchema,
       scopes,
       dims)
 
@@ -176,6 +193,7 @@ private class Context
     Context(
       plain,
       schemata,
+      currentSchema,
       scopes,
       dims ++ bindings.map(b => (b.id, QuantifiedDim.Global(b))).toMap
     )
@@ -184,6 +202,7 @@ private class Context
     Context(
       plain,
       schemata,
+      currentSchema,
       scopes,
       dims ++ bindings.map(b => (b.id, QuantifiedDim.Universal(b))).toMap
     )
@@ -192,8 +211,18 @@ private class Context
     Context(
       plain,
       schemata,
+      currentSchema,
       scopes,
       dims ++ bindings.map(b => (b.id, QuantifiedDim.Existential(b))).toMap
+    )
+
+  def withCurrentSchema(schemaBinding: SchemaBinding): Context =
+    Context(
+      plain,
+      schemata,
+      Some(schemaBinding),
+      scopes,
+      dims
     )
 
   def apply(ref: VertexRef): Option[VertexBinding] =

@@ -2,10 +2,12 @@ package hocki.klocki.typing
 
 import hocki.klocki.analysis.ResolvedNames
 import hocki.klocki.ast.Statement.{LocalExistentialDim, SchemaDef}
+import hocki.klocki.ast.dim.DimBinding
 import hocki.klocki.ast.schema.{Primitive, SchemaBinding, SchemaExpr, SchemaRef}
 import hocki.klocki.ast.{Abstra, Statement, Toplevel}
 import hocki.klocki.entities.{Dim, DimSetVar, Edge}
 import hocki.klocki.typing.Constraint.{In, InUnion, InducedBy, NotIn}
+import hocki.klocki.visualize.printConstraints
 
 import scala.collection.immutable
 import scala.collection.mutable
@@ -22,14 +24,24 @@ def inferTypes(toplevel: Toplevel, nr: ResolvedNames): Map[SchemaBinding, Schema
   val bindings =
     schemaDefs.map[(SchemaBinding, SchemaDef)](schemaDef => schemaDef.binding -> schemaDef).toMap
 
+  val globalDims = nr.globalDims.map(binding => binding -> Dim(binding.id.name)).toMap
+
   given Map[SchemaBinding, SchemaDef] = bindings
+
+  given Map[DimBinding, Dim] = globalDims
 
   schemaDefs.foreach(schemaDef => inferTypeFor(schemaDef.binding))
   typing.toMap
 
 private def inferTypeFor
 (schema: SchemaBinding)
-(using nr: ResolvedNames, typing: mutable.Map[SchemaBinding, SchemaTy], schemaDefs: Map[SchemaBinding, SchemaDef])
+(
+  using
+  nr: ResolvedNames,
+  typing: mutable.Map[SchemaBinding, SchemaTy],
+  schemaDefs: Map[SchemaBinding, SchemaDef],
+  globalDims: Map[DimBinding, Dim],
+)
 : Unit =
   if typing.contains(schema) then
     return
@@ -37,8 +49,13 @@ private def inferTypeFor
   val impl: Abstra.OnIface = schemaDef.impl match
     case onIface: Abstra.OnIface => onIface
     case _ => throw RuntimeException("Rank 1+ definitions verboten")
-  val ins = impl.iface.suppliers.map(binding => DimSetVar(binding.id.toString))
-  val outs = impl.iface.consumers.map(binding => DimSetVar(binding.id.toString))
+
+  val universals = schemaDef.params.universals.map(binding => binding -> Dim(binding.id.name))
+  val existentials = schemaDef.params.existentials.map(binding => binding -> Dim(binding.id.name))
+  val localDims = nr.localExistentialDims(schemaDef.binding).map(binding => binding -> Dim(binding.id.name))
+  val dimParams = universals.toMap ++ existentials.toMap ++ globalDims ++ localDims
+  val ins = impl.iface.suppliers.map(binding => DimSetVar(binding.id.name))
+  val outs = impl.iface.consumers.map(binding => DimSetVar(binding.id.name))
   val blocks =
     impl
       .body
@@ -56,14 +73,15 @@ private def inferTypeFor
           val dimMapping = use.expr match
             case ref: SchemaExpr.Leaf =>
               if ref.dimArgs.universals.size != ty.universalDims.size then
-                throw IllegalStateException("Wrong number of universal dim arguments")
+                throw IllegalStateException(s"Wrong number of universal dim arguments in use of $blockName in $schema. Expected ${ty.universalDims}, got ${ref.dimArgs.universals}")
               if ref.dimArgs.existentials.size != ty.existentialDims.size then
-                throw IllegalStateException("Wrong number of existential dim arguments")
+                throw IllegalStateException(s"Wrong number of existential dim arguments in use of $blockName in $schema. Expected ${ty.existentialDims}, got ${ref.dimArgs.existentials}")
               (ty.universalDims.zip(ref.dimArgs.universals) ++ ty.existentialDims.zip(ref.dimArgs.existentials))
-                .map((inType, inRef) => inType -> Dim(inRef.dimId.name))
+                .map((inType, inRef) => inType -> dimParams(nr.dimNames(inRef)))
                 .toMap
             case app: SchemaExpr.App => throw IllegalStateException("Rank 1+ uses verboten")
-          val constraints = ty.constraints.map(_.map(freshMapping))
+          println(dimMapping)
+          val constraints = ty.constraints.map(_.mapDimSetVars(freshMapping).mapDims(dimMapping))
           (use.iface.allVerticesInOrder.zip(blockIns ++ blockOuts).toMap, constraints)
         case schemaDef: Statement.SchemaDef => throw IllegalStateException("Nested defs verboten")
         case _: LocalExistentialDim => (Map(), Set()) // Do nothing
@@ -81,11 +99,23 @@ private def inferTypeFor
         (from, to)
       )
       .toSet
-  typing.put(schema, inferTypeFromConstraints(ins, outs, constraints, links))
+  typing.put(
+    schema,
+    inferTypeFromConstraints(
+      universals.map(_._2),
+      existentials.map(_._2),
+      localDims.map(_._2),
+      ins, outs, constraints, links)
+  )
 
 private def getTypeOf
 (expr: SchemaExpr)
-(using nr: ResolvedNames, typing: mutable.Map[SchemaBinding, SchemaTy], schemaDefs: Map[SchemaBinding, SchemaDef]): SchemaTy =
+(using
+ nr: ResolvedNames,
+ typing: mutable.Map[SchemaBinding, SchemaTy],
+ schemaDefs: Map[SchemaBinding, SchemaDef],
+ globalDims: Map[DimBinding, Dim],
+): SchemaTy =
   expr match
     case leaf: SchemaExpr.Leaf =>
       leaf.schemaRef match
@@ -135,6 +165,9 @@ private def getTypeOfPrimitive(primitive: Primitive): SchemaTy = primitive match
 
 private def inferTypeFromConstraints
 (
+  universalDims: List[Dim],
+  existentialDim: List[Dim],
+  localDims: Set[Dim],
   inDimSetVars: List[DimSetVar],
   outDimSetVars: List[DimSetVar],
   assumedConstraints: Set[Constraint],
@@ -143,10 +176,10 @@ private def inferTypeFromConstraints
   val immediateConstraints = getImmediateConstraints(inDimSetVars, outDimSetVars, edges)
 
   val (coalescence, unCoalescence) = coalescing(inDimSetVars, outDimSetVars, edges)
-  val constraints = (immediateConstraints ++ assumedConstraints).map(_.map(coalescence))
+  val constraints = (immediateConstraints ++ assumedConstraints).map(_.mapDimSetVars(coalescence))
 
   println(edges)
-  constraints.foreach(println)
+  printConstraints("Assumed constraints (obtained from recursion)", constraints)
   println()
 
   val direct_inductions = getConstraints[InducedBy](constraints)
@@ -162,14 +195,9 @@ private def inferTypeFromConstraints
         inductions, notIns), ins)
 
 
-  println("Ins:")
-  ins.foreach(println)
-
-  println("Not ins:")
-  notIns.foreach(println)
-
-  println("In unions:")
-  inUnions.foreach(println)
+  printConstraints("Ins:", ins)
+  printConstraints("Not ins:", notIns)
+  printConstraints("In unions:", inUnions)
 
   ins.foreach(
     in => if notIns.contains(NotIn(in.dim, in.dimSetVar)) then
@@ -200,12 +228,12 @@ private def inferTypeFromConstraints
 
   val allConstraints = relevantInductions ++ relevantIns ++ relevantNotIns ++ relevantInUnions
 
-  val finalConstraints = allConstraints.map(_.map(unCoalescence)).toSet
+  val finalConstraintsWithLocalDims = allConstraints.map(_.mapDimSetVars(unCoalescence)).toSet
+  printConstraints("Final constraints (with local dims)", finalConstraintsWithLocalDims)
 
-  println("Final constraints")
-  finalConstraints.foreach(println)
-
-  SchemaTy(List(), List(), inDimSetVars, outDimSetVars, finalConstraints)
+  val finalConstraints = hideLocalDims(finalConstraintsWithLocalDims, localDims)
+  printConstraints("Final constraints", finalConstraints)
+  SchemaTy(universalDims, existentialDim, inDimSetVars, outDimSetVars, finalConstraints)
 
 private def inferIns(ins: Set[In], inductions: Set[InducedBy]): Set[In] =
   ins ++ propagateInsDown(ins, inductions)
@@ -358,3 +386,52 @@ private def getImmediateConstraints(ins: List[DimSetVar], outs: List[DimSetVar],
   edges
     .filter(e => inSet.contains(e._1) && outSet.contains(e._2))
     .map(e => InducedBy(e._2, Set(FilteredDimSetVar(e._1, Set()))))
+
+private def hideLocalDims(constraints: Set[Constraint], localDims: Set[Dim]): Set[Constraint] =
+  constraints.flatMap {
+    case in@Constraint.In(dim, _) =>
+      if localDims.contains(dim) then
+        throw IllegalStateException(s"typing poszedł w rzepę: $in")
+      else
+        Some(in)
+    case inUnion@Constraint.InUnion(dim, _) =>
+      if localDims.contains(dim) then
+        throw IllegalStateException(s"typing poszedł w unijną rzepę: $inUnion")
+      else
+        Some(inUnion)
+    case notIn@Constraint.NotIn(dim, _) =>
+      if localDims.contains(dim) then
+        None // thank god that local dim is not present in the interface :relieved:
+      else
+        Some(notIn)
+    case dependsOnAll@Constraint.DependsOnAll(dim, _) =>
+      if localDims.contains(dim) then
+        None
+      else
+        Some(dependsOnAll)
+    case dependsOnDim@Constraint.DependsOnDim(depender, dependency) =>
+      if localDims.contains(depender) || localDims.contains(dependency) then
+        None
+      else
+        Some(dependsOnDim)
+    case Constraint.MinIn(dim, filteredDimSetVar) =>
+      if localDims.contains(dim) then
+        None
+      else
+        val constraint = dim minIn
+          FilteredDimSetVar(
+            filteredDimSetVar.dimSetVar,
+            filteredDimSetVar.filteredDimensions.diff(localDims)
+          )
+        Some(constraint)
+    case Constraint.InducedBy(induced, inducers) =>
+      val constraint = induced inducedBy
+        inducers.map(
+          filteredDimSetVar =>
+            FilteredDimSetVar(
+              filteredDimSetVar.dimSetVar,
+              filteredDimSetVar.filteredDimensions.diff(localDims)
+            )
+        )
+      Some(constraint)
+  }

@@ -8,5 +8,5 @@ class SchemaTy
   val existentialDims: List[Dim],
   val ins: List[DimSetVar],
   val outs: List[DimSetVar],
-  val constraints: Set[Constraint]
+  val constraints: Set[Constraint],
 )

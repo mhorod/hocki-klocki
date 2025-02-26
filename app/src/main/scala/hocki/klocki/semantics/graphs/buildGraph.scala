@@ -70,7 +70,7 @@ def createInterface(schemaDef: SchemaDef)(using nameGenerator: NameGenerator): S
       val outVertices = onIface.iface.consumers.map(v => nameGenerator.freshOutDimSetVar())
       SchemaInterface(
         schemaDef.params.universals.map(binding => Dim(binding.id.name)),
-        schemaDef.params.existential.map(binding => Dim(binding.id.name)),
+        schemaDef.params.existentials.map(binding => Dim(binding.id.name)),
         inVertices,
         outVertices,
       )
@@ -124,7 +124,7 @@ def buildSchema
   val allVertices = (schemaVertices ++ internalInVertices ++ internalOutVertices).toMap
 
   val ifaceUniversalDims = schemaDef.params.universals.zip(interface.universalDims)
-  val ifaceExistentialDims = schemaDef.params.existential.zip(interface.existentialDims)
+  val ifaceExistentialDims = schemaDef.params.existentials.zip(interface.existentialDims)
   val localExistentialDims = extractLocalDims(body.body).map(dim => (dim.binding, Dim(dim.binding.id.name)))
   val allDims = (ifaceUniversalDims ++ ifaceExistentialDims ++ localExistentialDims).toMap ++ globalDims
 
