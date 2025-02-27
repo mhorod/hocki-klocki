@@ -15,7 +15,7 @@ def presentTyping(typing: Map[SchemaBinding, SchemaTy]): String =
 
 def presentConstraints(constraints: Set[? <: Constraint]): String =
   if constraints.isEmpty then
-    "    stole (ukradli)"
+    "    stole (ukradli)" // https://youtu.be/4TxJkjz2HFI?feature=shared ; timestamp 0:20
   else
     constraints
       .toList

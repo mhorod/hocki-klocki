@@ -6,6 +6,8 @@ import hocki.klocki.entities.{Dim, DimSetVar}
 case class FilteredDimSetVar(dimSetVar: DimSetVar, filteredDimensions: Set[Dim]):
   override def toString: String = s"$dimSetVar \\ {${filteredDimensions.mkString(", ")}}"
 
+  def filters(dim: Dim): Boolean = filteredDimensions.contains(dim)
+  
   def mapDimSetVars(mapping: Map[DimSetVar, DimSetVar]): FilteredDimSetVar =
     FilteredDimSetVar(mapping(dimSetVar), filteredDimensions)
 
