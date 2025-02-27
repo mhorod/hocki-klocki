@@ -1,6 +1,11 @@
 package hocki.klocki.parsing
 
-import hocki.klocki.ast.{Abstra, BlockId, BuiltinSchema, ConnectionDecl, IfaceBinding, Link, SchemaBinding, SchemaExpr, SchemaId, Statement, Toplevel, VertexBinding, VertexId, VertexRef, VertexUse}
+import hocki.klocki.ast.schema.SchemaRef.Builtin
+import hocki.klocki.ast.Statement.LocalExistentialDim
+import hocki.klocki.ast.dim.{DimArgs, DimBinding, DimId, DimParams, DimRef}
+import hocki.klocki.ast.schema.{Primitive, IfaceBinding, SchemaBinding, SchemaExpr, SchemaId, SchemaRef}
+import hocki.klocki.ast.vertex.{BlockId, VertexBinding, VertexId, VertexRef}
+import hocki.klocki.ast.{Abstra, ConnectionDecl, GlobalDim, Link, Statement, Toplevel, ToplevelStatement, VertexUse}
 import hocki.klocki.entities.Dim
 
 import scala.util.parsing.combinator.RegexParsers
@@ -8,23 +13,33 @@ import scala.util.parsing.combinator.RegexParsers
 object DflParser extends RegexParsers:
   def program: Parser[Toplevel] = phrase(toplevel)
 
-  private def toplevel: Parser[Toplevel] = rep(statement) ~ opt(link) ^^ {
+  private def toplevel: Parser[Toplevel] = rep(toplevelStatement) ~ opt(link) ^^ {
     case statements ~ link => Toplevel(statements, link)
   }
 
   // Statement
 
-  private def statement: Parser[Statement] = schemaDef | blockUse
+  private def toplevelStatement: Parser[ToplevelStatement] = globalDim | statement
+  
+  private def statement: Parser[Statement] = schemaDef | blockUse | localExistentialDim
 
+  private def globalDim: Parser[GlobalDim] = ("global" ~> dimBinding) ~ opt("depends on" ~> dimRefList) ^^ {
+    case dimBinding ~ dimRefList => GlobalDim(dimBinding, dimRefList.getOrElse(List()))
+  }
+  
   private def schemaDef: Parser[Statement.SchemaDef] =
-    ("def" ~> schemaId) ~ ("=" ~> abstra) ^^ {
-      case schemaId ~ abstra => Statement.SchemaDef(SchemaBinding(schemaId), abstra)
+    ("def" ~> schemaId) ~ ("=" ~> (opt(dimParams) ~ abstra)) ^^ {
+      case schemaId ~ (dimParams ~ abstra) =>
+        Statement.SchemaDef(SchemaBinding(schemaId), dimParams.getOrElse(DimParams.empty), abstra)
     }
 
   private def blockUse: Parser[Statement.BlockUse] =
     ("use" ~> schemaExpr) ~ externalIfaceBinding ~ opt("as" ~> blockId) ^^ {
       case expr ~ ifaceDef ~ blockId => Statement.BlockUse(expr, ifaceDef, blockId)
     }
+
+  private def localExistentialDim: Parser[Statement.LocalExistentialDim] =
+    ("exists" ~> dimBinding) ^^ { LocalExistentialDim(_) }
 
   // Iface
 
@@ -48,39 +63,61 @@ object DflParser extends RegexParsers:
 
   // SchemaExpr
 
-  private def schemaExpr: Parser[SchemaExpr] = primitive | schemaRef | app
+  private def schemaExpr: Parser[SchemaExpr] = schemaExprLeaf | app
 
-  private def schemaRef: Parser[SchemaExpr.SchemaRef] = schemaId ^^ {
-    SchemaExpr.SchemaRef(_)
+  private def schemaExprLeaf: Parser[SchemaExpr.Leaf] = primitiveSchemaRef | namedSchemaRef
+
+  private def namedSchemaRef: Parser[SchemaExpr.Leaf] = schemaId ~ opt(dimArgs) ^^ {
+    case schemaId ~ dimArgs => SchemaExpr.Leaf(SchemaRef.Named(schemaId), dimArgs.getOrElse(DimArgs.empty))
   }
 
   private def app: Parser[SchemaExpr.App] = parenthesized(schemaExpr ~ schemaExpr) ^^ {
     case left ~ right => SchemaExpr.App(left, right)
   }
 
-  private def primitive: Parser[SchemaExpr.Primitive] = builtinSchema ^^ {
-    SchemaExpr.Primitive(_)
+  private def primitiveSchemaRef: Parser[SchemaExpr.Leaf] = builtinSchema ^^ {
+    (schema, args) => SchemaExpr.Leaf(Builtin(schema), args)
   }
 
   // Builtin
 
-  private def builtinSchema: Parser[BuiltinSchema] = union | add | remove
+  private def builtinSchema: Parser[(Primitive, DimArgs)] =
+    builtinUnion | builtinAddNamed | builtinAddExistential | builtinRemove
 
-  private def union: Parser[BuiltinSchema.Union] = "U" ~> braced(naturalNumber) ^^ {
-    BuiltinSchema.Union(_)
+  private def builtinUnion: Parser[(Primitive.Union, DimArgs)] = "U" ~> braced(naturalNumber) ^^ {
+    arity => (Primitive.Union(arity), DimArgs.empty)
   }
 
-  private def add: Parser[BuiltinSchema.Add] = "+" ~> dim ^^ {
-    BuiltinSchema.Add(_)
+  private def builtinAddNamed: Parser[(Primitive.AddNamed, DimArgs)] = "+" ~> dimRef ^^ {
+    ref => (Primitive.AddNamed(ref), DimArgs.empty)
   }
 
-  private def remove: Parser[BuiltinSchema.Remove] = "-" ~> dim ^^ {
-    BuiltinSchema.Remove(_)
+  private def builtinAddExistential: Parser[(Primitive.AddExistential, DimArgs)] = "*" ~> dimRef ^^ {
+    ref => (Primitive.AddExistential(), DimArgs(List(), List(ref)))
   }
+
+  private def builtinRemove: Parser[(Primitive.Remove, DimArgs)] = "-" ~> dimRef ^^ {
+    ref => (Primitive.Remove(), DimArgs(List(ref), List()))
+  }
+  
+  private def dimArgs: Parser[DimArgs] = angleBracketed(dimRefList ~ ("|" ~> dimRefList)) ^^ {
+    case universals ~ existentials => DimArgs(universals, existentials)
+  }
+
+  private def dimRef: Parser[DimRef] = dimId ^^ { DimRef(_) }
+  
+  private def dimRefList: Parser[List[DimRef]] = repsep(dimRef, ",")
 
   // Abstra
-
   private def abstra: Parser[Abstra] = onIface | onSchema
+
+  private def dimParams: Parser[DimParams] = angleBracketed(dimBindingList ~ ("|" ~> dimBindingList)) ^^ {
+    case universals ~ existentials => DimParams(universals, existentials)
+  }
+
+  private def dimBindingList: Parser[List[DimBinding]] = repsep(dimBinding, ",")
+
+  private def dimBinding: Parser[DimBinding] = dimId ^^ { DimBinding(_) }
 
   private def onIface: Parser[Abstra.OnIface] = internalIfaceBinding ~ rep(statement) ~ link ^^ {
     case iface ~ body ~ link => Abstra.OnIface(iface, body, link)
@@ -133,9 +170,9 @@ object DflParser extends RegexParsers:
       BlockId(_)
     }
 
-  private def dim: Parser[Dim] =
+  private def dimId: Parser[DimId] =
     """[a-z][a-zA-Z0-9_]*""".r ^^ {
-      Dim(_)
+      DimId(_)
     }
 
   private def naturalNumber: Parser[Int] =
@@ -152,3 +189,5 @@ object DflParser extends RegexParsers:
   private def bracketed[T](inner: Parser[T]): Parser[T] = delimited("[", inner, "]")
 
   private def braced[T](inner: Parser[T]): Parser[T] = delimited("{", inner, "}")
+
+  private def angleBracketed[T](inner: Parser[T]): Parser[T] = delimited("<", inner, ">")

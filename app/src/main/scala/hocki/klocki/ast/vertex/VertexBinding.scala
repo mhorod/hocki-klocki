@@ -1,4 +1,6 @@
-package hocki.klocki.ast
+package hocki.klocki.ast.vertex
+
+import hocki.klocki.ast.vertex.{VertexBinding, VertexId}
 
 sealed abstract class VertexBinding(val id: VertexId)
 
