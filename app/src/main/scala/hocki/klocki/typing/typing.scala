@@ -6,7 +6,7 @@ import hocki.klocki.ast.dim.DimBinding
 import hocki.klocki.ast.schema.{Primitive, SchemaBinding, SchemaExpr, SchemaRef}
 import hocki.klocki.ast.{Abstra, Statement, Toplevel}
 import hocki.klocki.entities.{Dim, DimSetVar, Edge}
-import hocki.klocki.typing.Constraint.{In, InUnion, InducedBy, NotIn}
+import hocki.klocki.typing.Constraint.{DependsOnAll, DependsOnDim, In, InUnion, InducedBy, NotIn, MinIn}
 import hocki.klocki.visualize.printConstraints
 
 import scala.collection.immutable
@@ -54,6 +54,7 @@ private def inferTypeFor
   val existentials = schemaDef.params.existentials.map(binding => binding -> Dim(binding.id.name))
   val localDims = nr.localExistentialDims(schemaDef.binding).map(binding => binding -> Dim(binding.id.name))
   val dimParams = universals.toMap ++ existentials.toMap ++ globalDims ++ localDims
+
   val ins = impl.iface.suppliers.map(binding => DimSetVar(binding.id.name))
   val outs = impl.iface.consumers.map(binding => DimSetVar(binding.id.name))
   val blocks =
@@ -80,8 +81,7 @@ private def inferTypeFor
                 .map((inType, inRef) => inType -> dimParams(nr.dimNames(inRef)))
                 .toMap
             case app: SchemaExpr.App => throw IllegalStateException("Rank 1+ uses verboten")
-          println(dimMapping)
-          val constraints = ty.constraints.map(_.mapDimSetVars(freshMapping).mapDims(dimMapping))
+          val constraints = ty.constraints.map(_.mapDimSetVars(freshMapping).mapDims(dimMapping.withDefault(d => d)))
           (use.iface.allVerticesInOrder.zip(blockIns ++ blockOuts).toMap, constraints)
         case schemaDef: Statement.SchemaDef => throw IllegalStateException("Nested defs verboten")
         case _: LocalExistentialDim => (Map(), Set()) // Do nothing
@@ -99,6 +99,7 @@ private def inferTypeFor
         (from, to)
       )
       .toSet
+  println(s"Inferring type for schema ${schemaDef.binding.id.name}")
   typing.put(
     schema,
     inferTypeFromConstraints(
@@ -126,14 +127,19 @@ private def getTypeOf
         case builtin: SchemaRef.Builtin => getTypeOfPrimitive(builtin.primitive)
     case app: SchemaExpr.App => throw IllegalStateException("Rank 1+ usages verboten")
 
-private def getTypeOfPrimitive(primitive: Primitive): SchemaTy = primitive match
+private def getTypeOfPrimitive
+(primitive: Primitive)
+(using
+ nr: ResolvedNames,
+ globalDims: Map[DimBinding, Dim]
+): SchemaTy = primitive match
   case Primitive.Union(arity) =>
     val xs = (0 until arity).map(i => DimSetVar(s"X$i")).toList
     val y = DimSetVar("Y")
     val constraint = y inducedBy xs.toSet.map(_ without Set())
     SchemaTy(List(), List(), xs, List(y), Set(constraint))
   case Primitive.AddNamed(dimRef) =>
-    val dim = Dim(dimRef.dimId.name)
+    val dim = globalDims(nr.dimNames(dimRef))
     val x = DimSetVar("X")
     val y = DimSetVar("Y")
     val constraints = Set[Constraint](
@@ -149,7 +155,8 @@ private def getTypeOfPrimitive(primitive: Primitive): SchemaTy = primitive match
     val constraints = Set[Constraint](
       dim notIn x,
       dim in y,
-      x inducedBy Set(y without Set(dim))
+      x inducedBy Set(y without Set(dim)),
+      dim dependsOnAll (x without Set())
     )
     SchemaTy(List(), List(dim), List(x), List(y), constraints)
   case Primitive.Remove() =>
@@ -159,7 +166,8 @@ private def getTypeOfPrimitive(primitive: Primitive): SchemaTy = primitive match
     val constraints = Set[Constraint](
       dim in x,
       dim notIn y,
-      x inducedBy Set(y without Set(dim))
+      x inducedBy Set(y without Set(dim)),
+      dim minIn (x without Set())
     )
     SchemaTy(List(dim), List(), List(x), List(y), constraints)
 
@@ -182,11 +190,21 @@ private def inferTypeFromConstraints
   printConstraints("Assumed constraints (obtained from recursion)", constraints)
   println()
 
-  val direct_inductions = getConstraints[InducedBy](constraints)
+  val directInductions = getConstraints[InducedBy](constraints)
   val inductions = inferInductions(constraints)
 
-  val ins = inferIns(getConstraints[In](constraints), inductions.values.toSet)
-  val notIns = inferNotIns(getConstraints[NotIn](constraints), inductions, direct_inductions)
+  val notIns = inferNotIns(getConstraints[NotIn](constraints), inductions, directInductions)
+
+  val (ins, depsOnAll, depsOnDim) =
+    inferInsAndDependencies(
+      inductions.values.toSet
+        ++ getConstraints[In](constraints)
+        ++ getConstraints[DependsOnDim](constraints)
+        ++ getConstraints[DependsOnAll](constraints)
+    )
+
+  val mins = inferMinima(inductions.values.toSet ++ getConstraints[MinIn](constraints))
+
   val inUnions =
     pruneUnions(
       inferInUnions(
@@ -195,9 +213,12 @@ private def inferTypeFromConstraints
         inductions, notIns), ins)
 
 
-  printConstraints("Ins:", ins)
-  printConstraints("Not ins:", notIns)
+  printConstraints("Ins", ins)
+  printConstraints("Not ins", notIns)
   printConstraints("In unions:", inUnions)
+  printConstraints("Deps on dim", depsOnDim)
+  printConstraints("Deps on all", depsOnAll)
+  printConstraints("Mins", mins)
 
   ins.foreach(
     in => if notIns.contains(NotIn(in.dim, in.dimSetVar)) then
@@ -207,6 +228,13 @@ private def inferTypeFromConstraints
   inUnions.foreach { inUnion =>
     if inUnion.union.isEmpty then
       throw IllegalStateException(s"SUS: $inUnion")
+  }
+
+  mins.foreach {
+    minIn =>
+      depsOnDim.find(depsOnDim => depsOnDim.dependency == minIn.dim && ins.contains(depsOnDim.depender in minIn.filteredDimSetVar.dimSetVar)) match
+        case Some(dep) => throw IllegalStateException(s"Typing poszedł w kalarepę, $minIn ale $dep")
+        case None => ()
   }
 
   val relevantInductions =
@@ -235,12 +263,35 @@ private def inferTypeFromConstraints
   printConstraints("Final constraints", finalConstraints)
   SchemaTy(universalDims, existentialDim, inDimSetVars, outDimSetVars, finalConstraints)
 
-private def inferIns(ins: Set[In], inductions: Set[InducedBy]): Set[In] =
-  ins ++ propagateInsDown(ins, inductions)
-
-private def inferNotIns(notIns: Set[NotIn], inductions: Map[DimSetVar, InducedBy], direct_inductions: Set[InducedBy]): Set[NotIn] =
+private def inferNotIns(notIns: Set[NotIn], inductions: Map[DimSetVar, InducedBy], directInductions: Set[InducedBy]): Set[NotIn] =
   val inferred = notIns ++ propagateNotInsUp(notIns, inductions)
-  inferred ++ propagateNotInsDown(inferred, direct_inductions)
+  inferred ++ propagateNotInsDown(inferred, directInductions)
+
+private def inferInsAndDependencies
+(constraints: Set[Constraint]): (Set[In], Set[DependsOnAll], Set[DependsOnDim]) =
+  val rules = Set(DependencyIsMember, DependsOnExplicitMember, MemberInduced)
+  val inferred = inferViaRulesToFixedPoint(rules, constraints)
+  (getConstraints[In](inferred), getConstraints[DependsOnAll](inferred), getConstraints[DependsOnDim](inferred))
+
+private def inferMinima(constraints: Set[Constraint]): Set[MinIn] =
+  val inferred = inferViaRulesToFixedPoint(Set(MinInInduction), constraints)
+  getConstraints[MinIn](inferred)
+
+private def inferViaRulesToFixedPoint(rules: Iterable[ConstraintObserver], initialConstraints: Iterable[Constraint]): Set[Constraint] =
+  val constraints = Constraints()
+  val toProcess = mutable.Set.from(initialConstraints)
+
+  given Constraints = constraints
+
+  while toProcess.nonEmpty do
+    val constraint = toProcess.head
+    toProcess.remove(constraint)
+    if !constraints.contains(constraint) then
+      println(s"Adding $constraint")
+      constraints.add(constraint)
+      toProcess.addAll(rules.flatMap(_.observe(constraint)))
+
+  constraints.constraints
 
 private def inferInUnions(inUnions: Set[InUnion], inductions: Map[DimSetVar, InducedBy], notIns: Set[NotIn]): Set[InUnion] =
   inUnions ++ propagateInUnionsUp(inUnions, inductions, notIns)

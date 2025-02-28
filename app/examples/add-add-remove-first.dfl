@@ -1,0 +1,13 @@
+
+def main = [X | Y]
+    exists a
+    exists b
+
+    use *a [X | Y] as AddA
+    use *b [X | Y] as AddB
+    use -a [X | Y] as RemoveA
+    link
+        X >-> AddA.X,
+        AddA.Y >-> AddB.X,
+        AddB.Y >-> RemoveA.X,
+        RemoveA.Y >-> Y

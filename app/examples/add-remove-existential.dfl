@@ -1,0 +1,19 @@
+def main = [X | Y]
+    exists d
+
+    use f<|d> [X | Y] as AddA
+    use g<d|> [X | Y] as RemoveA
+    link
+        X >-> AddA.X,
+        AddA.Y >-> RemoveA.X,
+        RemoveA.Y >-> Y
+
+def f = <|a> [X | Y]
+    use *a [X | Y] as AddA
+    link
+        X >-> AddA.X, AddA.Y >-> Y
+
+def g = <a|> [X | Y]
+    use -a [X | Y] as RemoveA
+    link
+        X >-> RemoveA.X, RemoveA.Y >-> Y
