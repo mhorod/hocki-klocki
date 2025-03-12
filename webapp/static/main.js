@@ -101,10 +101,10 @@ function update() {
         }
     ).then(response => {
         if (!response.ok) throw new Error("Non ok result status");
-        return response.blob()
+        return response.text()
     })
-        .then(blob => {
-            document.getElementById("codeImage").src = URL.createObjectURL(blob);
+        .then(svg => {
+            document.getElementById("codeImage").innerHTML = svg
             if (showTyping) {
                 fetch('/get-typing').then(r => {
                     if (!r.ok) throw new Error("Non ok return status");
