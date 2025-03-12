@@ -1,55 +1,75 @@
-package hocki.klocki.semantics.graphs
+package hocki.klocki.visualize.graph
 
 import hocki.klocki.analysis.ResolvedNames
+import hocki.klocki.ast.*
 import hocki.klocki.ast.Statement.{BlockUse, SchemaDef}
 import hocki.klocki.ast.dim.DimBinding
 import hocki.klocki.ast.schema.{SchemaBinding, SchemaExpr, SchemaRef}
-import hocki.klocki.ast.{Abstra, AstNode, GlobalDim, Statement, Toplevel}
 import hocki.klocki.entities.{Dim, DimSetVar}
 import hocki.klocki.names.{NameGenerator, SimpleNameGenerator}
+import hocki.klocki.visualize.graph.SchemaInterface
 
-class SchemaInterface
-(
-  val universalDims: List[Dim],
-  val existentialDims: List[Dim],
-  val inVertices: List[DimSetVar],
-  val outVertices: List[DimSetVar]
-)
+import scala.collection.mutable
+
+class IdGenerator {
+  private var nextSchemaId = 0
+  private var nextDimId = 0
+  private var nextDimSetVarId = 0
+
+  private val dims: mutable.Map[DimId, String] = mutable.Map()
+  private val dimSetVars: mutable.Map[DimSetVarId, String] = mutable.Map()
+
+  def getDims: Map[DimId, String] = dims.toMap
+  def getDimSetVars: Map[DimSetVarId, String] = dimSetVars.toMap
+
+
+  def schemaId: SchemaId =
+    val id = nextSchemaId
+    nextSchemaId += 1
+    SchemaId(id)
+
+  def dimId(name: String): DimId =
+    val id = nextDimId
+    nextDimId += 1
+    dims.put(DimId(id), name)
+    DimId(id)
+
+  def dimSetVarId(name: String): DimSetVarId =
+    val id = nextDimSetVarId
+    nextDimSetVarId += 1
+    dimSetVars.put(DimSetVarId(id), name)
+    DimSetVarId(id)
+}
 
 class SchemataInfo
 (
-  val builtinIds: Map[SchemaRef.Builtin, BlockSchemaId],
-  val schemaIds: Map[SchemaBinding, BlockSchemaId],
-  val interfaces: Map[BlockSchemaId, SchemaInterface]
+  val builtinIds: Map[SchemaRef.Builtin, SchemaId],
+  val schemaIds: Map[SchemaBinding, SchemaId],
+  val interfaces: Map[SchemaId, SchemaInterface]
 ):
-  def apply(builtin: SchemaRef.Builtin): BlockSchemaId = builtinIds(builtin)
+  def apply(builtin: SchemaRef.Builtin): SchemaId = builtinIds(builtin)
 
-  def apply(schema: SchemaBinding): BlockSchemaId = schemaIds(schema)
+  def apply(schema: SchemaBinding): SchemaId = schemaIds(schema)
 
-def buildGraph(ast: Toplevel, nr: ResolvedNames): List[BlockSchema] =
+def buildProgram(ast: Toplevel, nr: ResolvedNames): Program =
   given NameGenerator = SimpleNameGenerator()
+
+  val idGenerator = IdGenerator()
+
+  given IdGenerator = idGenerator
 
   val schemaDefs = extractSchemata(ast)
   val builtIns = extractUsedBuiltIns(ast)
 
-  val schemaIds = schemaDefs.map(schemaDef => schemaDef.binding -> BlockSchemaId()).toMap
+  val schemaIds = schemaDefs.map(schemaDef => schemaDef.binding -> idGenerator.schemaId).toMap
   val builtinSchemata = builtIns.map(b => b -> fromAst(b.primitive)).toMap
   val builtinIds = builtIns.map(b => b -> builtinSchemata(b).id).toMap
-  val globalDims = extractGlobalDims(ast).map(dim => dim.binding -> Dim(dim.binding.id.name)).toMap
+  val globalDims = extractGlobalDims(ast).map(dim => dim.binding -> idGenerator.dimId(dim.binding.id.name)).toMap
 
 
   val interfaces = schemaDefs.map(schemaDef => schemaIds(schemaDef.binding) -> createInterface(schemaDef)).toMap
     ++
-    builtIns.map(b => {
-      val id = builtinIds(b)
-      val schema = builtinSchemata(b)
-      id -> SchemaInterface(
-        schema.universalDims,
-        schema.existentialDims,
-        schema.inVertices,
-        schema.outVertices,
-      )
-    })
+    builtIns.map(b => builtinIds(b) -> builtinSchemata(b).interface)
 
   val schemataInfo = SchemataInfo(
     builtinIds,
@@ -60,17 +80,24 @@ def buildGraph(ast: Toplevel, nr: ResolvedNames): List[BlockSchema] =
   val schemata =
     schemaDefs.map(schemaDef => buildSchema(schemaDef, nr, schemataInfo, globalDims)) ++ builtinSchemata.values
 
-  schemata
+  Program(
+    idGenerator.getDims,
+    globalDims.values.toSet,
+    idGenerator.getDimSetVars,
+    schemata
+  )
 
-def createInterface(schemaDef: SchemaDef)(using nameGenerator: NameGenerator): SchemaInterface =
+def createInterface
+(schemaDef: SchemaDef)
+(using idGenerator: IdGenerator): SchemaInterface =
   schemaDef.impl match
     case onSchema: Abstra.OnSchema => throw UnsupportedOperationException("Higher rank is not supported yet")
     case onIface: Abstra.OnIface =>
-      val inVertices = onIface.iface.suppliers.map(v => nameGenerator.freshInDimSetVar())
-      val outVertices = onIface.iface.consumers.map(v => nameGenerator.freshOutDimSetVar())
+      val inVertices = onIface.iface.suppliers.map(v => idGenerator.dimSetVarId(v.id.name))
+      val outVertices = onIface.iface.consumers.map(v => idGenerator.dimSetVarId(v.id.name))
       SchemaInterface(
-        schemaDef.params.universals.map(binding => Dim(binding.id.name)),
-        schemaDef.params.existentials.map(binding => Dim(binding.id.name)),
+        schemaDef.params.universals.map(binding => idGenerator.dimId(binding.id.name)),
+        schemaDef.params.existentials.map(binding => idGenerator.dimId(binding.id.name)),
         inVertices,
         outVertices,
       )
@@ -100,8 +127,8 @@ def buildSchema
   schemaDef: SchemaDef,
   nr: ResolvedNames,
   schemataInfo: SchemataInfo,
-  globalDims: Map[DimBinding, Dim]
-)(using nameGenerator: NameGenerator): BlockSchema =
+  globalDims: Map[DimBinding, DimId]
+)(using nameGenerator: NameGenerator, idGenerator: IdGenerator): Schema =
   schemaDef.impl match
     case onSchema: Abstra.OnSchema => throw UnsupportedOperationException("Higher rank is not supported yet")
     case onIface: Abstra.OnIface => buildSchema(schemaDef, nr, schemataInfo, onIface, globalDims)
@@ -112,20 +139,24 @@ def buildSchema
   nr: ResolvedNames,
   schemataInfo: SchemataInfo,
   body: Abstra.OnIface,
-  globalDims: Map[DimBinding, Dim]
-)(using nameGenerator: NameGenerator): BlockSchema =
+  globalDims: Map[DimBinding, DimId]
+)(using nameGenerator: NameGenerator, idGenerator: IdGenerator): Schema =
   val schemaId = schemataInfo(schemaDef.binding)
   val interface = schemataInfo.interfaces(schemaId)
   val schemaVertices = body.iface.suppliers.zip(interface.inVertices) ++ body.iface.consumers.zip(interface.outVertices)
 
   val blockUses = extractBlockUses(body.body)
-  val internalInVertices = blockUses.flatMap(_.iface.consumers).map(v => v -> nameGenerator.freshInDimSetVar())
-  val internalOutVertices = blockUses.flatMap(_.iface.suppliers).map(v => v -> nameGenerator.freshOutDimSetVar())
+  val internalInVertices = blockUses
+    .flatMap(_.iface.consumers)
+    .map(v => v -> idGenerator.dimSetVarId(v.id.name))
+  val internalOutVertices = blockUses
+    .flatMap(_.iface.suppliers)
+    .map(v => v -> idGenerator.dimSetVarId(v.id.name))
   val allVertices = (schemaVertices ++ internalInVertices ++ internalOutVertices).toMap
 
   val ifaceUniversalDims = schemaDef.params.universals.zip(interface.universalDims)
   val ifaceExistentialDims = schemaDef.params.existentials.zip(interface.existentialDims)
-  val localExistentialDims = extractLocalDims(body.body).map(dim => (dim.binding, Dim(dim.binding.id.name)))
+  val localExistentialDims = extractLocalDims(body.body).map(dim => (dim.binding, idGenerator.dimId(dim.binding.id.name)))
   val allDims = (ifaceUniversalDims ++ ifaceExistentialDims ++ localExistentialDims).toMap ++ globalDims
 
   println(s"Local: $localExistentialDims")
@@ -159,7 +190,6 @@ def buildSchema
         iface.outVertices.zip(outVerticesMapping).toMap,
       universalsMapping ++ existentialsMapping
     )
-    println(blockToString(block))
     block
   }.toSet
 
@@ -167,13 +197,10 @@ def buildSchema
     allVertices(nr.vertexNames(conn.from)) -> allVertices(nr.vertexNames(conn.to))
   }.toSet
 
-  BlockSchema(
+  Schema(
     schemaId,
     schemaDef.binding.id.name,
-    interface.universalDims,
-    interface.existentialDims,
-    interface.inVertices,
-    interface.outVertices,
+    interface,
     blocks,
     edges
   )

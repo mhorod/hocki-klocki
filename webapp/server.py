@@ -4,6 +4,8 @@ import requests
 import subprocess
 import tempfile
 
+import visualization
+
 pathlib.Path('dfl').mkdir(parents=True, exist_ok=True)
 
 with open('dfl/typing.txt', 'w') as f:
@@ -14,7 +16,7 @@ app = Flask(__name__,
     static_folder='static',
 )
 
-def generate_graphviz_code(code, expansionDepth, show_typing):
+def generate_program(code, expansionDepth, show_typing):
     with open("dfl/file.dfl", "w") as f:
         f.write(code)
 
@@ -23,14 +25,16 @@ def generate_graphviz_code(code, expansionDepth, show_typing):
         "-jar",
         "dfl/app.jar",
         "dfl/file.dfl",
-        "dfl/file.dot",
+        "dfl/file.json",
         expansionDepth,
     ]
     if show_typing == 'true':
        command.append('dfl/typing.txt')
     print("Running " + ' '.join(map(str, command)))
     subprocess.run(command)
-    return open("dfl/file.dot").read()
+    return visualization.json_to_graphviz("dfl/file.json", int(expansionDepth))
+        
+
 
 @app.route('/generate-image/<expansionDepth>', methods=['POST'])
 def generate_image(expansionDepth):
@@ -38,13 +42,16 @@ def generate_image(expansionDepth):
     code = data['code']
     show_typing = request.args.get("typing")
 
-    graphviz_code = generate_graphviz_code(code, expansionDepth, show_typing)
+    graphviz_code = generate_program(code, expansionDepth, show_typing)
+    print(graphviz_code)
     with tempfile.NamedTemporaryFile(suffix='.dot', delete=False) as f:
         f.write(graphviz_code.encode('utf-8'))
         f.flush()
-        output_path = f.name.replace('.dot', '.png')
-        subprocess.run(['dot', '-Tpng', f.name, '-o', output_path])
-        return send_file(output_path, mimetype='image/png')
+        output_path_png = f.name.replace('.dot', '.png')
+        output_path_svg = f.name.replace(".dot", ".svg")
+        subprocess.run(['dot', '-n', '-Tpng', f.name, '-o', output_path_png])
+        subprocess.run(['dot', '-n', '-Tsvg', f.name, '-o', output_path_svg])
+        return send_file(output_path_svg, mimetype='image/svg')
 
 @app.route('/get-typing', methods=['GET'])
 def get_typing():

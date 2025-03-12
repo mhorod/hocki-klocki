@@ -2,12 +2,10 @@ package hocki.klocki.pipeline
 
 import hocki.klocki.analysis.resolveNames
 import hocki.klocki.ast.Toplevel
-import hocki.klocki.ast.schema.SchemaBinding
 import hocki.klocki.parsing.DflParser
-import hocki.klocki.semantics.graphs.buildGraph
 import hocki.klocki.typing.{SchemaTy, inferTypes}
-import hocki.klocki.utils.printTree
-import hocki.klocki.visualize.{presentTyping, schemataToGraphviz}
+import hocki.klocki.visualize.graph.{buildProgram, programToJson}
+import hocki.klocki.visualize.presentTyping
 
 import java.io.{BufferedWriter, FileWriter}
 import scala.io.Source.fromFile
@@ -28,9 +26,8 @@ def runPipeline
           e.printStackTrace()
           return false
 
-      val graph = buildGraph(tree, names)
-      val graphviz = schemataToGraphviz(graph, expansionDepth)
-      writeToFile(graphviz, outputFilename)
+      val program = buildProgram(tree, names)
+      writeToFile(programToJson(program), outputFilename)
 
       typingFilename match
         case Some(filename) =>

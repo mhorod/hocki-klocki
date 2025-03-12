@@ -7,7 +7,11 @@ Compile / mainClass := Some("Main")
 lazy val root = (project in file("."))
   .settings(
     name := "wdbn",
-    libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % "2.4.0",
+    libraryDependencies ++=
+      Seq(
+        "org.scala-lang.modules" %% "scala-parser-combinators" % "2.4.0",
+        "com.lihaoyi" %% "upickle" % "4.1.0"
+      ),
     assembly / mainClass := Some("Main"), // for sbt-assembly
     assembly / assemblyJarName := "app.jar", // for sbt-assembly
   )
