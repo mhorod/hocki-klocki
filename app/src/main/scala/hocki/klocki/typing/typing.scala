@@ -254,7 +254,19 @@ private def inferTypeFromConstraints
       .map[InUnion](inUnion => InUnion(inUnion.dim, inUnion.union.filter(d => unCoalescence.contains(d))))
       .filter(_.union.nonEmpty)
 
-  val allConstraints = relevantInductions ++ relevantIns ++ relevantNotIns ++ relevantInUnions
+  println(unCoalescence)
+  val relevantDepsOnAll = depsOnAll.filter(dep => unCoalescence.contains(dep.filteredDimSetVar.dimSetVar))
+  val relevantDepsOnDim = depsOnDim
+  val relevantMins = mins.filter(min => unCoalescence.contains(min.filteredDimSetVar.dimSetVar))
+
+  val allConstraints =
+    relevantInductions
+      ++ relevantIns
+      ++ relevantNotIns
+      ++ relevantInUnions
+      ++ relevantDepsOnAll
+      ++ relevantDepsOnDim
+      ++ relevantMins
 
   val finalConstraintsWithLocalDims = allConstraints.map(_.mapDimSetVars(unCoalescence)).toSet
   printConstraints("Final constraints (with local dims)", finalConstraintsWithLocalDims)
@@ -269,7 +281,7 @@ private def inferNotIns(notIns: Set[NotIn], inductions: Map[DimSetVar, InducedBy
 
 private def inferInsAndDependencies
 (constraints: Set[Constraint]): (Set[In], Set[DependsOnAll], Set[DependsOnDim]) =
-  val rules = Set(DependencyIsMember, DependsOnExplicitMember, MemberInduced)
+  val rules = Set(DependencyIsMember, DependsOnExplicitMember, MemberInduced, DependsOnSubset)
   val inferred = inferViaRulesToFixedPoint(rules, constraints)
   (getConstraints[In](inferred), getConstraints[DependsOnAll](inferred), getConstraints[DependsOnDim](inferred))
 
@@ -422,13 +434,12 @@ private def coalescing
 : (Map[DimSetVar, DimSetVar], Map[DimSetVar, DimSetVar]) =
   val inSet = ins.toSet
   val outSet = outs.toSet
-  val coalescence = outs.zip(outs).toMap ++ (
+  val coalescence = (
     edges
       .filterNot(e => inSet.contains(e._1) && outSet.contains(e._2))
       .map(_.swap)
-      ++ edges.map(e => (e(0), e(0)))
-    ).toMap
-  val unCoalescence = (ins.map(v => v -> v) ++ outs.map(v => coalescence(v) -> v)).toMap
+    ).toMap.withDefault(k => k)
+  val unCoalescence = (ins.map(v => v -> v) ++ outs.map(v => coalescence(v) -> v)).toMap.withDefault(k => k)
   (coalescence, unCoalescence)
 
 private def getImmediateConstraints(ins: List[DimSetVar], outs: List[DimSetVar], edges: Set[Edge]): Set[Constraint] =

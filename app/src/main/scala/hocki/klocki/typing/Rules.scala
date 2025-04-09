@@ -24,6 +24,32 @@ object DependsOnExplicitMember extends ConstraintObserver:
           .map(in => dim dependsOnDim in.dim)
       case _ => Set()
 
+//  a --> Y \ A   Y  ⊇ X \ B
+//  ------------------------
+//      a --> X \ (A u B)
+object DependsOnSubset extends ConstraintObserver:
+  override def observe
+  (newConstraint: Constraint)
+  (using constraints: Constraints): Set[Constraint] =
+    newConstraint match
+      case InducedBy(induced, inducers) =>
+        constraints.findDependsOnAllByDimSetVar(induced)
+          .flatMap(depOnAll =>
+            inducers.map(
+              fdsv => depOnAll.dim dependsOnAll (
+                fdsv.dimSetVar without (depOnAll.filteredDimSetVar.filteredDimensions union fdsv.filteredDimensions)
+              )
+            )
+          )
+      case DependsOnAll(dim, filteredDimSetVar) =>
+        constraints
+          .findInducers(filteredDimSetVar.dimSetVar)
+          .map(inducedBy =>
+            dim dependsOnAll (
+              inducedBy.dimSetVar without (filteredDimSetVar.filteredDimensions union inducedBy.filteredDimensions)
+            )
+          )
+      case _ => Set()
 
 //  a --> b    a ∈ X
 //  ----------------

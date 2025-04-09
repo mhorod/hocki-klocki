@@ -115,7 +115,7 @@ def schema_to_graphviz(
             for u in schema.interface.out_vertices:
                 edges_drawn.add((v, u))
 
-    structural_edges = "\n".join(
+    structural_edges = "" if depth > 0 else "\n".join(
         f"{vertex_name_mapping[v]} -> {vertex_name_mapping[u]} [style=invis, weight=0]"
         for v in schema.interface.in_vertices
         for u in schema.interface.out_vertices
