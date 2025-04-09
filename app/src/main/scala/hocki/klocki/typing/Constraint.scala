@@ -15,8 +15,8 @@ enum Constraint:
     case In(dim, dimSetVar) => s"$dim ∈ $dimSetVar"
     case InUnion(dim, union) => s"$dim ∈ U{${union.mkString(", ")}}"
     case NotIn(dim, dimSetVar) => s"$dim ∉ $dimSetVar"
-    case DependsOnAll(dim, filteredDimSetVar) => s"$dim --> $filteredDimSetVar"
-    case DependsOnDim(depender, dependency) => s"$depender --> $dependency"
+    case DependsOnAll(dim, filteredDimSetVar) => s"$dim -> $filteredDimSetVar"
+    case DependsOnDim(depender, dependency) => s"$depender -> $dependency"
     case MinIn(dim, filteredDimSetVar) => s"$dim ⟂ $filteredDimSetVar"
     case InducedBy(induced, inducers) => s"$induced ⊇ ${inducers.mkString(", ")}"
   

@@ -1,0 +1,13 @@
+def main = <|a, b> [X|Y1, Y2]
+  use -a [X | Y] as RemoveA
+  use -a [X | Y] as RemoveA2
+  use *a [X | Y] as AddA
+  use *b [X | Y] as AddB
+  link
+     X >-> RemoveA.X,
+     X >-> AddB.X,
+     AddB.Y >-> RemoveA2.X,
+     RemoveA2.Y >-> AddA.X,
+     AddA.Y >-> Y1,
+     RemoveA.Y >-> Y2
+g
