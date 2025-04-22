@@ -164,7 +164,7 @@ private def getTypeOfPrimitive
     val x = DimSetVar("X")
     val y = DimSetVar("Y")
     val constraints = Set[Constraint](
-      dim in x,
+      dim inUnion Set(x),
       dim notIn y,
       x inducedBy Set(y without Set(dim)),
       dim minIn (x without Set())
