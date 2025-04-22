@@ -9,7 +9,8 @@ enum Constraint:
   case DependsOnAll(dim: Dim, filteredDimSetVar: FilteredDimSetVar)
   case DependsOnDim(depender: Dim, dependency: Dim)
   case MinIn(dim: Dim, filteredDimSetVar: FilteredDimSetVar)
-  case InducedBy(induced: DimSetVar, inducers: Set[FilteredDimSetVar])
+  case InductionNamed(dim: Dim, from: DimSetVar, to: DimSetVar)
+  case InductionUnnamed(from: DimSetVar, to: DimSetVar)
 
   override def toString: String = this match
     case In(dim, dimSetVar) => s"$dim ∈ $dimSetVar"
@@ -18,7 +19,8 @@ enum Constraint:
     case DependsOnAll(dim, filteredDimSetVar) => s"$dim -> $filteredDimSetVar"
     case DependsOnDim(depender, dependency) => s"$depender -> $dependency"
     case MinIn(dim, filteredDimSetVar) => s"$dim ⟂ $filteredDimSetVar"
-    case InducedBy(induced, inducers) => s"$induced ⊇ ${inducers.mkString(", ")}"
+    case InductionUnnamed(from, to) => s"$from ==> $to"
+    case InductionNamed(dim, from, to) => s"$from ==$dim=> $to"
   
   def mapDimSetVars(mapping: Map[DimSetVar, DimSetVar]): Constraint = this match
     case In(dim, dimSetVar) => In(dim, mapping(dimSetVar))
@@ -27,7 +29,8 @@ enum Constraint:
     case DependsOnAll(dim, filteredDimSetVar) => DependsOnAll(dim, filteredDimSetVar.mapDimSetVars(mapping))
     case dependsOnDim: DependsOnDim => dependsOnDim
     case MinIn(dim, filteredDimSetVar) => MinIn(dim, filteredDimSetVar.mapDimSetVars(mapping))
-    case InducedBy(induced, inducers) => InducedBy(mapping(induced), inducers.map(_.mapDimSetVars(mapping)))
+    case InductionNamed(dim, from, to) => InductionNamed(dim, mapping(from), mapping(to))
+    case InductionUnnamed(from, to) => InductionUnnamed(mapping(from), mapping(to))
 
   def mapDims(mapping: Map[Dim, Dim]): Constraint = this match
     case In(dim, dimSetVar) => In(mapping(dim), dimSetVar)
@@ -36,7 +39,5 @@ enum Constraint:
     case DependsOnAll(dim, filteredDimSetVar) => DependsOnAll(mapping(dim), filteredDimSetVar.mapDims(mapping))
     case dependsOnDim: DependsOnDim => dependsOnDim
     case MinIn(dim, filteredDimSetVar) => MinIn(mapping(dim), filteredDimSetVar.mapDims(mapping))
-    case InducedBy(induced, inducers) => InducedBy(induced, inducers.map(_.mapDims(mapping)))
-
-extension (inducedBy: Constraint.InducedBy)
-  def inducerDimSetVars: Set[DimSetVar] = inducedBy.inducers.map(_.dimSetVar)
+    case InductionNamed(dim, from, to) => InductionNamed(mapping(dim), from, to)
+    case InductionUnnamed(from, to) => InductionUnnamed(from, to)

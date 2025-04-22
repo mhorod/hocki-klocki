@@ -1,7 +1,7 @@
 package hocki.klocki.typing
 
 import hocki.klocki.entities.{Dim, DimSetVar}
-import hocki.klocki.typing.Constraint.{DependsOnAll, DependsOnDim, In, InducedBy, MinIn}
+import hocki.klocki.typing.Constraint.{DependsOnAll, DependsOnDim, In, MinIn}
 
 import scala.collection.mutable
 
@@ -44,18 +44,4 @@ class Constraints:
     constraints.collect {
       case dependsOnDim: DependsOnDim
         if dependsOnDim.depender == dim => dependsOnDim.dependency
-    }
-
-  def findInductionsByInducer(inducer: DimSetVar): Set[(DimSetVar, FilteredDimSetVar)] =
-    constraints.flatMap {
-      case inducedBy: InducedBy =>
-        inducedBy.inducers.find(filteredInducer => filteredInducer.dimSetVar == inducer)
-          .map(filteredInducer => (inducedBy.induced, filteredInducer))
-      case _ => None
-    }
-
-  def findInducers(induced: DimSetVar): Set[FilteredDimSetVar] =
-    constraints.flatMap {
-      case inducedBy: InducedBy if inducedBy.induced == induced => inducedBy.inducers
-      case _ => Set()
     }

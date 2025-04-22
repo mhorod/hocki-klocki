@@ -12,5 +12,10 @@ extension (dim: Dim)
 
 
 extension (dimSetVar: DimSetVar)
-  infix def inducedBy(inducers: Set[FilteredDimSetVar]): Constraint.InducedBy = Constraint.InducedBy(dimSetVar, inducers)
   infix def without(dims: Set[Dim]): FilteredDimSetVar = FilteredDimSetVar(dimSetVar, dims)
+  infix def ~~>(other: DimSetVar): Constraint.InductionUnnamed = Constraint.InductionUnnamed(dimSetVar, other)
+  infix def ~(dim: Dim): PartiallyAppliedInduction = PartiallyAppliedInduction(dimSetVar, dim)
+
+infix case class PartiallyAppliedInduction(dimSetVar: DimSetVar, dim: Dim):
+  infix def ~>(other: DimSetVar): Constraint.InductionNamed = Constraint.InductionNamed(dim, dimSetVar, other)
+
