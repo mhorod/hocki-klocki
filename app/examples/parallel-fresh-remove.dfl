@@ -1,0 +1,4 @@
+def f = <b|a> [X | Y, Z]
+    use *a [X | Y] as StarA
+    use -b [X | Y] as RemB
+    link X >-> StarA.X, X >-> RemB.X, StarA.Y >-> Y, RemB.Y >-> Z
