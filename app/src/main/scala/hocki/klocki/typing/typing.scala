@@ -3,15 +3,13 @@ package hocki.klocki.typing
 import hocki.klocki.analysis.ResolvedNames
 import hocki.klocki.ast.Statement.{LocalExistentialDim, SchemaDef}
 import hocki.klocki.ast.dim.DimBinding
-import hocki.klocki.ast.schema.{Primitive, SchemaBinding, SchemaExpr, SchemaRef}
+import hocki.klocki.ast.schema.{SchemaBinding, SchemaExpr, SchemaRef}
 import hocki.klocki.ast.{Abstra, Statement, Toplevel}
-import hocki.klocki.entities.{Dim, DimSetVar, Edge}
-import hocki.klocki.typing.Constraint.{DependsOnAll, DependsOnDim, In, InUnion, InductionNamed, InductionUnnamed, MinIn, NotIn}
-import hocki.klocki.visualize.printConstraints
+import hocki.klocki.entities.{Dim, DimSetVar}
+import hocki.klocki.typing.Constraint.InductionUnnamed
 
 import scala.collection.immutable
 import scala.collection.mutable
-import scala.reflect.ClassTag
 
 def inferTypes(toplevel: Toplevel, nr: ResolvedNames): Map[SchemaBinding, SchemaTy] =
   val schemaDefs = toplevel.statements.collect { case schemaDef: Statement.SchemaDef => schemaDef }
@@ -85,15 +83,16 @@ private def inferTypeFor
             case app: SchemaExpr.App => throw IllegalStateException("Rank 1+ uses verboten")
           val constraints = ty.constraints.map(_.mapDimSetVars(freshMapping).mapDims(dimMapping.withDefault(d => d)))
           val usedDims = ty.usedDims.map(dimMapping.withDefault(d => d))
-          (use.iface.allVerticesInOrder.zip(blockIns ++ blockOuts).toMap, constraints, usedDims)
+          (use.iface.allVerticesInOrder.zip(blockIns ++ blockOuts).toMap, constraints, (blockIns ++ blockOuts).toSet, usedDims)
         case schemaDef: Statement.SchemaDef => throw IllegalStateException("Nested defs verboten")
         case _: LocalExistentialDim => throw IllegalStateException("Fresh dims verboten")
       }
       .toSet
-  val allUsedDims = blocks.flatMap(_._3)
+  val allDimSetVars = blocks.flatMap(_._3)
+  val allUsedDims = blocks.flatMap(_._4)
   val bindingsToDimSetVars = impl.iface.allVerticesInOrder.zip(ins ++ outs).toMap ++ blocks.flatMap(_._1)
   val constraints = blocks.flatMap {
-    case (blockIface, blockConstraints, blockUsedDims) =>
+    case (blockIface, blockConstraints, _, blockUsedDims) =>
       val additionalConstraints =
         blockConstraints.flatMap {
           case InductionUnnamed(from, to) => (allUsedDims diff blockUsedDims).map(from ~_~> to) // ~_~
@@ -115,10 +114,17 @@ private def inferTypeFor
   typing.put(
     schema,
     inferTypeFromConstraints(
+      schema,
       universals.map(_._2),
       existentials.map(_._2),
       localDims.map(_._2),
-      ins, outs, constraints, links)
+      allUsedDims,
+      allDimSetVars ++ ins.toSet ++ outs.toSet,
+      ins,
+      outs,
+      constraints,
+      links
+    )
   )
 
 private def getTypeOf

@@ -3,14 +3,14 @@ package hocki.klocki.typing
 import hocki.klocki.entities.{Dim, DimSetVar}
 
 enum Constraint:
-  case In(dim: Dim, dimSetVar: DimSetVar)
-  case InUnion(dim: Dim, union: Set[DimSetVar])
   case NotIn(dim: Dim, dimSetVar: DimSetVar)
+  case InUnion(dim: Dim, union: Set[DimSetVar])
   case DependsOnAll(dim: Dim, filteredDimSetVar: FilteredDimSetVar)
   case DependsOnDim(depender: Dim, dependency: Dim)
   case MinIn(dim: Dim, filteredDimSetVar: FilteredDimSetVar)
   case InductionNamed(dim: Dim, from: DimSetVar, to: DimSetVar)
   case InductionUnnamed(from: DimSetVar, to: DimSetVar)
+  case In(dim: Dim, dimSetVar: DimSetVar)
 
   override def toString: String = this match
     case In(dim, dimSetVar) => s"$dim ∈ $dimSetVar"

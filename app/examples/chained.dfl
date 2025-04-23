@@ -1,3 +1,6 @@
+global a
+global b
+
 def chained = [X | Y]
     use +a[In | Out] as AddA
     use +b[In | Out] as AddB

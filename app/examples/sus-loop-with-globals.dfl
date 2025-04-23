@@ -1,0 +1,20 @@
+global a
+global b
+
+def main = [|]
+    use fa [X | Y] as FA
+    use fb [X | Y] as FB
+    link
+        FA.Y >-> FB.X, FB.Y >-> FA.X
+
+def fa = [X | Y]
+    use -a [X | Y] as RemoveA
+    use +a [X | Y] as AddA
+    link
+        X >-> RemoveA.X, RemoveA.Y >-> AddA.X, AddA.Y >-> Y
+
+def fb = [X | Y]
+    use -b [X | Y] as RemoveB
+    use +b [X | Y] as AddB
+    link
+        X >-> RemoveB.X, RemoveB.Y >-> AddB.X, AddB.Y >-> Y

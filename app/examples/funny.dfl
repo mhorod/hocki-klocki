@@ -1,3 +1,6 @@
+global a
+global b
+
 def funny = [X0, X1 | Y0, Y1]
     use +a[In | Out] as AddA
     use -b[In | Out] as RemoveB

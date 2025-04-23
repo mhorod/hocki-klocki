@@ -146,6 +146,7 @@ private def resolveExistentialDim(ref: DimRef, ctx: Context)(using resolved: Mut
 private def resolveGlobalDim(ref: DimRef, ctx: Context)(using resolved: MutableResolvedNames): Unit =
   ctx(ref) match
     case Some(QuantifiedDim.Global(binding)) => resolved.dimNames.put(ref, binding)
+    case Some(QuantifiedDim.Universal(binding)) => resolved.dimNames.put(ref, binding)
     case Some(dim) => throw RuntimeException(s"Expected $ref to refer to global dim, but found  $dim")
     case None => throw RuntimeException(s"Unresolved reference to dim $ref")
 

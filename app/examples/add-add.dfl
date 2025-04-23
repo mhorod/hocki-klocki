@@ -1,8 +1,9 @@
+global a
 
 def main = [X | Y]
-    use +a [X | Y] as RemoveA
-    use +a [X | Y] as AddA
+    use +a [X | Y] as FirstAddA
+    use +a [X | Y] as SecondAddA
     link
-        X >-> RemoveA.X,
-        RemoveA.Y >-> AddA.X,
-        AddA.Y >-> Y
+        X >-> FirstAddA.X,
+        FirstAddA.Y >-> SecondAddA.X,
+        SecondAddA.Y >-> Y

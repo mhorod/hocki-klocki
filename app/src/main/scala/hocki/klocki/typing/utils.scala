@@ -32,5 +32,8 @@ private def filterRelevantConstraints
   constraints.filter {
     case Constraint.InductionNamed(_, from, to) => ifaceDimSetVars.contains(from) && ifaceDimSetVars.contains(to)
     case Constraint.InductionUnnamed(from, to) => ifaceDimSetVars.contains(from) && ifaceDimSetVars.contains(to)
+    case Constraint.In(_, dsv) => ifaceDimSetVars.contains(dsv)
+    case Constraint.NotIn(_, dsv) => ifaceDimSetVars.contains(dsv)
+    case Constraint.InUnion(_, union) => union subsetOf ifaceDimSetVars
     case _ => false
   }
