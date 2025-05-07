@@ -27,8 +27,10 @@ class ResolvedNames
   val schemaNames: Map[SchemaRef, SchemaBinding],
   val dimNames: Map[DimRef, DimBinding],
   val globalDims: Set[DimBinding],
-  val localExistentialDims: Map[SchemaBinding, Set[DimBinding]]
-)
+  val localExistentialDims: Map[SchemaBinding, Set[DimBinding]],
+  val schemaDefs: Set[SchemaDef]
+):
+  lazy val schemaBindings = schemaDefs.map(schemaDef => schemaDef.binding -> schemaDef).toMap
 
 class MutableResolvedNames
 (
@@ -38,20 +40,22 @@ class MutableResolvedNames
   val globalDims: mutable.Set[DimBinding],
   val localExistentialDims: mutable.Map[SchemaBinding, mutable.Set[DimBinding]]
 ):
-  def toResolvedNames: ResolvedNames =
+  def toResolvedNames(schemaDefs: Set[SchemaDef]): ResolvedNames =
     ResolvedNames(
       vertexNames.toMap,
       schemaNames.toMap,
       dimNames.toMap,
       globalDims.toSet,
       localExistentialDims.toMap.map((k, v) => k -> v.toSet),
+      schemaDefs,
     )
 
 
 def resolveNames(ast: Toplevel): ResolvedNames =
   val resolved = MutableResolvedNames(mutable.Map(), mutable.Map(), mutable.Map(), mutable.Set(), mutable.Map())
   resolveNames(ast, Context(Map(), Map(), Option.empty, Map(), Map()))(using resolved)
-  resolved.toResolvedNames
+  val schemaDefs = ast.statements.collect { case schemaDef: Statement.SchemaDef => schemaDef }.toSet
+  resolved.toResolvedNames(schemaDefs)
 
 private def resolveNames(node: AstNode, ctx: Context)(using resolved: MutableResolvedNames): Context =
   node match

@@ -5,28 +5,14 @@ import hocki.klocki.entities.{Dim, DimSetVar, Edge}
 import hocki.klocki.typing.Constraint.{In, InUnion, InductionNamed, InductionUnnamed, NotIn}
 import hocki.klocki.visualize.printConstraints
 
-def inferTypeFromConstraints
-(
-  schemaBinding: SchemaBinding,
-  universalDims: List[Dim],
-  existentialDim: List[Dim],
-  localDims: Set[Dim],
-  usedDims: Set[Dim],
-  allDimSetVars: Set[DimSetVar],
-  inDimSetVars: List[DimSetVar],
-  outDimSetVars: List[DimSetVar],
-  assumedConstraints: Set[Constraint],
-  edges: Set[Edge]
-): SchemaTy =
-  val ifaceDimSetVars = (inDimSetVars ++ outDimSetVars).toSet
-
-  val withInductions = inferInductions(assumedConstraints, edges, usedDims)
+def inferConstraints(): Set[Constraint] =
+  val withInductions = inferInductions(assumedConstraints, internals.edges, iface.allDims)
 
   val namedInductions = getConstraints[InductionNamed](withInductions)
   val unnamedInductions = getConstraints[InductionUnnamed](withInductions)
 
-  val ins = propagateInsDown(getConstraints[In](assumedConstraints), namedInductions, allDimSetVars)
-  val notIns = propagateNotInsUp(getConstraints[NotIn](assumedConstraints), namedInductions, allDimSetVars)
+  val ins = propagateInsDown(getConstraints[In](assumedConstraints), namedInductions, internals.allDimSetVars)
+  val notIns = propagateNotInsUp(getConstraints[NotIn](assumedConstraints), namedInductions, internals.allDimSetVars)
   val inUnions = propagateInUnionsUp(
     removeSatisfiedUnions(
       getConstraints[InUnion](assumedConstraints),
@@ -34,28 +20,28 @@ def inferTypeFromConstraints
     ),
     namedInductions,
     notIns,
-    ifaceDimSetVars,
+    iface.allDimSetVars,
   )
 
   val allConstraints = namedInductions ++ unnamedInductions ++ ins ++ notIns ++ inUnions
 
   val relevantConstraints = filterRelevantConstraints(
     allConstraints,
-    ifaceDimSetVars,
+    iface.allDimSetVars,
   )
 
   checkForContradictions(allConstraints)
 
-  println(s"\nTyping ${schemaBinding.id}")
+  println(s"\nTyping ${binding.id}")
   printConstraints("Assumed constraints (obtained from recursion)", assumedConstraints)
   printConstraints("Named inductions", namedInductions)
   printConstraints("Unnamed inductions", unnamedInductions)
   printConstraints("Ins", ins)
   printConstraints("Not ins", notIns)
   printConstraints("In unions", inUnions)
-  printConstraints(s"${schemaBinding.id} : [${inDimSetVars.mkString(", ")} | ${outDimSetVars.mkString(", ")}]", relevantConstraints)
+  printConstraints(s"${binding.id} : [${iface.ins.mkString(", ")} | ${iface.outs.mkString(", ")}]", relevantConstraints)
 
-  SchemaTy(universalDims, existentialDim, usedDims, inDimSetVars, outDimSetVars, relevantConstraints)
+  relevantConstraints
 
 private def inferInductions(constraints: Set[Constraint], edges: Set[Edge], usedDims: Set[Dim]): Set[Constraint] =
   val rules = List(ComposeInductionsNamed, ComposeInductionsUnnamed)
@@ -64,9 +50,9 @@ private def inferInductions(constraints: Set[Constraint], edges: Set[Edge], used
     constraints ++ edges.flatMap { case (u, v) => usedDims.map(u ~_~> v) + (u ~~> v) },
   )
 
-private def propagateInsDown(ins: Set[In], inductions: Set[InductionNamed], iface: Set[DimSetVar]): Set[In] =
+private def propagateInsDown(ins: Set[In], inductions: Set[InductionNamed], dsvs: Set[DimSetVar]): Set[In] =
   ins ++ ins.flatMap(
-    c => iface
+    c => dsvs
       .filter(dsv => inductions.contains(c.dimSetVar ~c.dim~> dsv))
       .map(dsv => c.dim in dsv)
   )

@@ -1,9 +1,9 @@
 package hocki.klocki.typing
 
 import hocki.klocki.analysis.ResolvedNames
-import hocki.klocki.ast.Statement.{LocalExistentialDim, SchemaDef}
-import hocki.klocki.ast.dim.DimBinding
-import hocki.klocki.ast.schema.{SchemaBinding, SchemaExpr, SchemaRef}
+import hocki.klocki.ast.Statement.{BlockUse, LocalExistentialDim, SchemaDef}
+import hocki.klocki.ast.dim.{DimArgs, DimBinding, DimParams}
+import hocki.klocki.ast.schema.{IfaceBinding, SchemaBinding, SchemaExpr, SchemaRef}
 import hocki.klocki.ast.{Abstra, Statement, Toplevel}
 import hocki.klocki.entities.{Dim, DimSetVar}
 import hocki.klocki.typing.Constraint.InductionUnnamed
@@ -11,136 +11,55 @@ import hocki.klocki.typing.Constraint.InductionUnnamed
 import scala.collection.immutable
 import scala.collection.mutable
 
-def inferTypes(toplevel: Toplevel, nr: ResolvedNames): Map[SchemaBinding, SchemaTy] =
-  val schemaDefs = toplevel.statements.collect { case schemaDef: Statement.SchemaDef => schemaDef }
-  val typing = mutable.Map[SchemaBinding, SchemaTy]()
-
-  given mutable.Map[SchemaBinding, SchemaTy] = typing
-  given ResolvedNames = nr
-  given Map[SchemaBinding, SchemaDef] =
-    schemaDefs.map[(SchemaBinding, SchemaDef)](schemaDef => schemaDef.binding -> schemaDef).toMap
-  given Map[DimBinding, Dim] =
-    nr.globalDims.map(binding => binding -> Dim(binding.id.name)).toMap
-
-  schemaDefs.foreach(schemaDef => inferTypeFor(schemaDef.binding))
-
-  typing.toMap
-
-private def inferTypeFor
-(schema: SchemaBinding)
+private case class SchemaDims
 (
-  using
-  nr: ResolvedNames,
-  typing: mutable.Map[SchemaBinding, SchemaTy],
-  schemaDefs: Map[SchemaBinding, SchemaDef],
-  globalDims: Map[DimBinding, Dim],
-)
-: Unit =
-  if typing.contains(schema) then
-    return
-  val schemaDef = schemaDefs(schema)
-  val impl: Abstra.OnIface = schemaDef.impl match
-    case onIface: Abstra.OnIface => onIface
-    case _ => throw RuntimeException("Rank 1+ definitions verboten")
+  universals: Map[DimBinding, Dim],
+  existentials: Map[DimBinding, Dim],
+  locals: Map[DimBinding, Dim],
+):
+  lazy val all: Map[DimBinding, Dim] = universals ++ existentials ++ locals
 
-  val universals = schemaDef.params.universals.map(binding => binding -> Dim(binding.id.name))
-  val existentials = schemaDef.params.existentials.map(binding => binding -> Dim(binding.id.name))
-  val localDims = nr.localExistentialDims(schemaDef.binding).map(binding => binding -> Dim(binding.id.name))
-  val dimParams = universals.toMap ++ existentials.toMap ++ globalDims ++ localDims
+def inferTypes(toplevel: Toplevel, nr: ResolvedNames): Map[SchemaBinding, SchemaTy] =
+  given ResolvedNames = nr
 
-  val ins = impl.iface.suppliers.map(binding => DimSetVar(binding.id.name))
-  val outs = impl.iface.consumers.map(binding => DimSetVar(binding.id.name))
+  val schemaDims = nr.schemaDefs.map(d => d.binding -> createDims(d)).toMap
+  val definedIfaces = constructDefinedIfaces(schemaDims, nr.schemaDefs)
 
-  val usedDims =
-    impl.body.flatMap {
-      case use: Statement.BlockUse => getTypeOf(use.expr).usedDims
-      case _ => Set()
-    }
+  ???
 
-  val blocks =
-    impl
+def createDims(schemaDef: SchemaDef): SchemaDims =
+  val universals = schemaDef.params.universals.map(binding => binding -> Dim(binding.id.name)).toMap
+  val existentials = schemaDef.params.existentials.map(binding => binding -> Dim(binding.id.name)).toMap
+  val locals =
+    getMonomorphic(schemaDef.impl)
       .body
-      .map {
-        case use: Statement.BlockUse =>
-          val ty = getTypeOf(use.expr)
-          if ty.ins.size != use.iface.consumers.size then
-            throw IllegalStateException("Wrong number of consumers")
-          if ty.outs.size != use.iface.suppliers.size then
-            throw IllegalStateException("Wrong number of suppliers")
-          val blockName = use.name.getOrElse("<anon>")
-          val blockIns = use.iface.consumers.map(binding => DimSetVar(s"$blockName.${binding.id}"))
-          val blockOuts = use.iface.suppliers.map(binding => DimSetVar(s"$blockName.${binding.id}"))
-          val freshMapping = (ty.ins.zip(blockIns) ++ ty.outs.zip(blockOuts)).toMap
-          val dimMapping = use.expr match
-            case ref: SchemaExpr.Leaf =>
-              if ref.dimArgs.universals.size != ty.universalDims.size then
-                throw IllegalStateException(s"Wrong number of universal dim arguments in use of $blockName in $schema. Expected ${ty.universalDims.size}, got ${ref.dimArgs.universals.size}")
-              if ref.dimArgs.existentials.size != ty.existentialDims.size || ty.existentialDims.nonEmpty then
-                throw IllegalStateException(s"Wrong number of existential dim arguments in use of $blockName in $schema. Expected 0, got ${ref.dimArgs.existentials.size}")
-              (ty.universalDims.zip(ref.dimArgs.universals) ++ ty.existentialDims.zip(ref.dimArgs.existentials))
-                .map((inType, inRef) => inType -> dimParams(nr.dimNames(inRef)))
-                .toMap
-            case app: SchemaExpr.App => throw IllegalStateException("Rank 1+ uses verboten")
-          val constraints = ty.constraints.map(_.mapDimSetVars(freshMapping).mapDims(dimMapping.withDefault(d => d)))
-          val usedDims = ty.usedDims.map(dimMapping.withDefault(d => d))
-          (use.iface.allVerticesInOrder.zip(blockIns ++ blockOuts).toMap, constraints, (blockIns ++ blockOuts).toSet, usedDims)
-        case schemaDef: Statement.SchemaDef => throw IllegalStateException("Nested defs verboten")
-        case _: LocalExistentialDim => throw IllegalStateException("Fresh dims verboten")
-      }
-      .toSet
-  val allDimSetVars = blocks.flatMap(_._3)
-  val allUsedDims = blocks.flatMap(_._4)
-  val bindingsToDimSetVars = impl.iface.allVerticesInOrder.zip(ins ++ outs).toMap ++ blocks.flatMap(_._1)
-  val constraints = blocks.flatMap {
-    case (blockIface, blockConstraints, _, blockUsedDims) =>
-      val additionalConstraints =
-        blockConstraints.flatMap {
-          case InductionUnnamed(from, to) => (allUsedDims diff blockUsedDims).map(from ~_~> to) // ~_~
-          case _ => Set()
-        }
-      blockConstraints ++ additionalConstraints
-  }
-  val links =
-    impl
-      .link
-      .connections
-      .map(conn =>
-        val from = bindingsToDimSetVars(nr.vertexNames(conn.from))
-        val to = bindingsToDimSetVars(nr.vertexNames(conn.to))
-        (from, to)
-      )
-      .toSet
-  println(s"Inferring type for schema ${schemaDef.binding.id.name}")
-  typing.put(
-    schema,
-    inferTypeFromConstraints(
-      schema,
-      universals.map(_._2),
-      existentials.map(_._2),
-      localDims.map(_._2),
-      allUsedDims,
-      allDimSetVars ++ ins.toSet ++ outs.toSet,
-      ins,
-      outs,
-      constraints,
-      links
-    )
+      .collect { case exists: LocalExistentialDim => exists.binding -> Dim(exists.binding.id.name) }
+      .toMap
+  SchemaDims(universals, existentials, locals)
+
+
+def constructDefinedIfaces(schemaDims: Map[SchemaBinding, SchemaDims], defs: Set[SchemaDef]): Map[SchemaBinding, SchemaIface] =
+  defs.map(schemaDef =>
+    schemaDef.binding -> constructDefinedIface(
+      schemaDims(schemaDef.binding),
+      schemaDef.params, 
+      getMonomorphic(schemaDef.impl).iface)
+  ).toMap
+
+def constructDefinedIface
+(
+  dims: SchemaDims, 
+  params: DimParams,
+  vertexIface: IfaceBinding.Internal,
+): SchemaIface =
+  SchemaIface(
+    params.universals.map(dims.universals),
+    params.existentials.map(dims.existentials),
+    vertexIface.suppliers.map(v => DimSetVar(v.id.name)),
+    vertexIface.consumers.map(v => DimSetVar(v.id.name))
   )
 
-private def getTypeOf
-(expr: SchemaExpr)
-(using
- nr: ResolvedNames,
- typing: mutable.Map[SchemaBinding, SchemaTy],
- schemaDefs: Map[SchemaBinding, SchemaDef],
- globalDims: Map[DimBinding, Dim],
-): SchemaTy =
-  expr match
-    case leaf: SchemaExpr.Leaf =>
-      leaf.schemaRef match
-        case named: SchemaRef.Named =>
-          val binding = nr.schemaNames(named)
-          inferTypeFor(binding)
-          typing(binding)
-        case builtin: SchemaRef.Builtin => getTypeOfPrimitive(builtin.primitive)
-    case app: SchemaExpr.App => throw IllegalStateException("Rank 1+ usages verboten")
+def constructUsedIface(args: DimArgs, vertexIface: IfaceBinding.External)(using nr: ResolvedNames): SchemaIface = ???
+//  SchemaIface(
+//    args.universals.map(nr.dimNames)
+//  )

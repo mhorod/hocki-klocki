@@ -1,5 +1,6 @@
 package hocki.klocki.typing
 
+import hocki.klocki.ast.Abstra
 import hocki.klocki.entities.DimSetVar
 import hocki.klocki.typing.Constraint
 
