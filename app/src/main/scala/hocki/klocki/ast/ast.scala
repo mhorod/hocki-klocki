@@ -1,5 +1,6 @@
 package hocki.klocki.ast
 
+import hocki.klocki.ast.Statement.BlockUse
 import hocki.klocki.ast.dim.{DimBinding, DimParams, DimRef}
 import hocki.klocki.ast.schema.{IfaceBinding, SchemaBinding, SchemaExpr}
 import hocki.klocki.ast.vertex.{BlockId, VertexRef}
@@ -20,6 +21,8 @@ object Abstra:
     override def children: List[AstNode] = body :+ link
 
     override def toString: String = iface.toString
+    
+    lazy val blockUses: Set[BlockUse] = body.collect { case use: BlockUse => use }.toSet
 
   class OnSchema(val binding: SchemaBinding, val impl: Abstra) extends Abstra:
     override def children: List[Abstra] = List(impl)

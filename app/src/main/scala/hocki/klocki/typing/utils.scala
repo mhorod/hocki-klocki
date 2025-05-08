@@ -1,6 +1,6 @@
 package hocki.klocki.typing
 
-import hocki.klocki.ast.Abstra
+import hocki.klocki.ast.{Abstra, Binding}
 import hocki.klocki.entities.DimSetVar
 import hocki.klocki.typing.Constraint
 
@@ -38,3 +38,6 @@ private def filterRelevantConstraints
     case Constraint.InUnion(_, union) => union subsetOf ifaceDimSetVars
     case _ => false
   }
+
+private def instantiateBound[B <: Binding, E](bindings: List[B], toEntity: String => E): Map[B, E] =
+  bindings.map(binding => binding -> toEntity(binding.id.name)).toMap

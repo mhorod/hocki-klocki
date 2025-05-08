@@ -30,7 +30,8 @@ class ResolvedNames
   val localExistentialDims: Map[SchemaBinding, Set[DimBinding]],
   val schemaDefs: Set[SchemaDef]
 ):
-  lazy val schemaBindings = schemaDefs.map(schemaDef => schemaDef.binding -> schemaDef).toMap
+  lazy val schemaBindings: Map[SchemaBinding, SchemaDef] =
+    schemaDefs.map(schemaDef => schemaDef.binding -> schemaDef).toMap
 
 class MutableResolvedNames
 (
@@ -124,9 +125,7 @@ private def resolveUsedSchema(expr: SchemaExpr, ctx: Context)(using resolved: Mu
       leaf.dimArgs.existentials.foreach(resolveExistentialDim(_, ctx))
       leaf.schemaRef match
         case builtin: SchemaRef.Builtin =>
-          builtin.primitive match
-            case Primitive.AddNamed(dim) => resolveGlobalDim(dim, ctx)
-            case _ => () // Nothing to resolve here
+          resolved.schemaNames.put(leaf.schemaRef, getBindingOfPrimitive(builtin.primitive))
         case named: SchemaRef.Named =>
           ctx(named) match
             case Some(binding) =>

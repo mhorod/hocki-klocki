@@ -1,33 +1,36 @@
 package hocki.klocki.typing
 
+import hocki.klocki.Config
 import hocki.klocki.analysis.ResolvedNames
 import hocki.klocki.ast.dim.DimBinding
 import hocki.klocki.ast.schema.Primitive
 import hocki.klocki.entities.{Dim, DimSetVar}
 
-def getTypeOfPrimitive
-(primitive: Primitive)
-(using
- nr: ResolvedNames,
- globalDims: Map[DimBinding, Dim],
-): SchemaTy = primitive match
-  case union: Primitive.Union => getTypeOfUnion(union)
-  case addNamed: Primitive.AddNamed => getTypeOfAddNamed(addNamed)
-  case addExistential: Primitive.AddExistential => throw new IllegalStateException("Existential dims verboten")
-  case remove: Primitive.Remove => getTypeOfRemove(remove)
+def getTypeOfPrimitive(primitive: Primitive): SchemaTy = primitive match
+  case Primitive.Union(n) => tysOfUnions(n)
+  case Primitive.Add() => tyOfAdd
+  case Primitive.Spawn() => tyOfSpawn
+  case Primitive.Remove() => tyOfRemove
 
-private def getTypeOfUnion(union: Primitive.Union): SchemaTy =
-  val xs = (0 until union.arity).map(i => DimSetVar(s"X$i")).toList
+private val tysOfUnions: Vector[SchemaTy] = Vector.from((0 until Config.MaxUnionWidth).map(generateTyOfUnion))  
+
+private val tyOfAdd: SchemaTy = generateTyOfExtendWithDim(isUniversalDim = true)
+
+private val tyOfSpawn: SchemaTy = generateTyOfExtendWithDim(isUniversalDim = false)
+
+private val tyOfRemove: SchemaTy =
+  val dim = Dim("δ")
+  val x = DimSetVar("X")
   val y = DimSetVar("Y")
-  SchemaTy(List(), List(), Set(), xs, List(y), xs.map(_ ~~> y).toSet)
+  val constraints = Set[Constraint](
+    dim inUnion Set(x),
+    x ~~> y,
+  )
+  val iface = SchemaIface(List(dim), List(), List(x), List(y))
+  SchemaTy(iface, constraints)
 
-private def getTypeOfAddNamed
-(addNamed: Primitive.AddNamed)
-(using
-  nr: ResolvedNames,
-  globalDims: Map[DimBinding, Dim],
-): SchemaTy =
-  val dim = globalDims(nr.dimNames(addNamed.dim))
+private def generateTyOfExtendWithDim(isUniversalDim: Boolean): SchemaTy =
+  val dim = Dim("δ")
   val x = DimSetVar("X")
   val y = DimSetVar("Y")
   val constraints = Set[Constraint](
@@ -35,14 +38,12 @@ private def getTypeOfAddNamed
     dim in y,
     x ~~> y,
   )
-  SchemaTy(List(), List(), Set(dim), List(x), List(y), constraints)
+  val (universals, existentials) = if isUniversalDim then (List(dim), List()) else (List(), List(dim))
+  val iface = SchemaIface(universals, existentials, List(x), List(y))
+  SchemaTy(iface, constraints)
 
-private def getTypeOfRemove(remove: Primitive.Remove): SchemaTy =
-  val dim = Dim("a")
-  val x = DimSetVar("X")
+private def generateTyOfUnion(arity: Int): SchemaTy =
+  val xs = (0 until arity).map(i => DimSetVar(s"X$i")).toList
   val y = DimSetVar("Y")
-  val constraints = Set[Constraint](
-    dim inUnion Set(x),
-    x ~~> y,
-  )
-  SchemaTy(List(dim), List(), Set(dim), List(x), List(y), constraints)
+  val iface = SchemaIface(List(), List(), xs, List(y))
+  SchemaTy(iface, xs.map(_ ~~> y).toSet)

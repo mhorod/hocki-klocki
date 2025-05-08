@@ -1,4 +1,6 @@
 package hocki.klocki.ast.dim
 
-case class DimId(name: String):
+import hocki.klocki.ast.Identifier
+
+case class DimId(name: String) extends Identifier:
   override def toString: String = name

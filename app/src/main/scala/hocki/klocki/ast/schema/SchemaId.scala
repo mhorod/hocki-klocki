@@ -1,4 +1,6 @@
 package hocki.klocki.ast.schema
 
-case class SchemaId(name: String):
+import hocki.klocki.ast.Identifier
+
+case class SchemaId(name: String) extends Identifier:
   override def toString: String = name

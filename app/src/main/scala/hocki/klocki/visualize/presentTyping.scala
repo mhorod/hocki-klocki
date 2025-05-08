@@ -5,10 +5,10 @@ import hocki.klocki.typing.{Constraint, SchemaTy}
 
 def presentTyping(typing: Map[SchemaBinding, SchemaTy]): String =
   typing.map((schema, ty) =>
-    val universals = ty.universalDims.mkString(", ")
-    val existentials = ty.existentialDims.mkString(", ")
-    val ins = ty.ins.mkString(", ")
-    val outs = ty.outs.mkString(", ")
+    val universals = ty.iface.universals.mkString(", ")
+    val existentials = ty.iface.existentials.mkString(", ")
+    val ins = ty.iface.ins.mkString(", ")
+    val outs = ty.iface.outs.mkString(", ")
     val constraints = presentConstraints(ty.constraints)
     s"${schema.id}<$universals | $existentials> : [$ins | $outs]\n$constraints"
   ).mkString("\n\n")

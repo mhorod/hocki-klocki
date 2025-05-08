@@ -1,4 +1,6 @@
 package hocki.klocki.ast.vertex
 
-case class BlockId(name: String):
+import hocki.klocki.ast.Identifier
+
+case class BlockId(name: String) extends Identifier:
   override def toString: String = name

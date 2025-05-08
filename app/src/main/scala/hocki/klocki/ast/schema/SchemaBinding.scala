@@ -1,4 +1,6 @@
 package hocki.klocki.ast.schema
 
-class SchemaBinding(val id: SchemaId):
+import hocki.klocki.ast.Binding
+
+class SchemaBinding(val id: SchemaId) extends Binding:
   override def toString: String = s"${id}_@${hashCode()}"

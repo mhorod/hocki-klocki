@@ -88,12 +88,12 @@ object DflParser extends RegexParsers:
     arity => (Primitive.Union(arity), DimArgs.empty)
   }
 
-  private def builtinAddNamed: Parser[(Primitive.AddNamed, DimArgs)] = "+" ~> dimRef ^^ {
-    ref => (Primitive.AddNamed(ref), DimArgs.empty)
+  private def builtinAddNamed: Parser[(Primitive.Add, DimArgs)] = "+" ~> dimRef ^^ {
+    ref => (Primitive.Add(), DimArgs(List(ref), List()))
   }
 
-  private def builtinAddExistential: Parser[(Primitive.AddExistential, DimArgs)] = "*" ~> dimRef ^^ {
-    ref => (Primitive.AddExistential(), DimArgs(List(), List(ref)))
+  private def builtinAddExistential: Parser[(Primitive.Spawn, DimArgs)] = "*" ~> dimRef ^^ {
+    ref => (Primitive.Spawn(), DimArgs(List(), List(ref)))
   }
 
   private def builtinRemove: Parser[(Primitive.Remove, DimArgs)] = "-" ~> dimRef ^^ {

@@ -22,6 +22,6 @@ def fromAst(schema: Primitive)(using idGenerator: IdGenerator): Schema =
   val name = schema.toString
   schema match
     case Primitive.Union(arity) => namedBuiltinSchema(name, 0, 0, arity, 1)
-    case Primitive.AddNamed(_) => namedBuiltinSchema(name, 0, 0, 1, 1)
-    case Primitive.AddExistential() => namedBuiltinSchema(name, 0, 1, 1, 1)
+    case Primitive.Add() => namedBuiltinSchema(name, 0, 0, 1, 1)
+    case Primitive.Spawn() => namedBuiltinSchema(name, 0, 1, 1, 1)
     case Primitive.Remove() => namedBuiltinSchema(name, 1, 0, 1, 1)
