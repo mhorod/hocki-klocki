@@ -1,0 +1,3 @@
+def main = <a|>[X|Y]
+    use -a [X | Y] as AddA
+    link X >-> AddA.X, AddA.Y >-> Y

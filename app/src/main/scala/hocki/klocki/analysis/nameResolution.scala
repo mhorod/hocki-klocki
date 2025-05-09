@@ -28,7 +28,8 @@ class ResolvedNames
   val dimNames: Map[DimRef, DimBinding],
   val globalDims: Set[DimBinding],
   val localExistentialDims: Map[SchemaBinding, Set[DimBinding]],
-  val schemaDefs: Set[SchemaDef]
+  val schemaDefs: Set[SchemaDef],
+  val primitives: Map[Primitive, SchemaBinding]
 ):
   lazy val schemaBindings: Map[SchemaBinding, SchemaDef] =
     schemaDefs.map(schemaDef => schemaDef.binding -> schemaDef).toMap
@@ -39,7 +40,8 @@ class MutableResolvedNames
   val schemaNames: mutable.Map[SchemaRef, SchemaBinding],
   val dimNames: mutable.Map[DimRef, DimBinding],
   val globalDims: mutable.Set[DimBinding],
-  val localExistentialDims: mutable.Map[SchemaBinding, mutable.Set[DimBinding]]
+  val localExistentialDims: mutable.Map[SchemaBinding, mutable.Set[DimBinding]],
+  val primitives: mutable.Map[Primitive, SchemaBinding]
 ):
   def toResolvedNames(schemaDefs: Set[SchemaDef]): ResolvedNames =
     ResolvedNames(
@@ -49,11 +51,12 @@ class MutableResolvedNames
       globalDims.toSet,
       localExistentialDims.toMap.map((k, v) => k -> v.toSet),
       schemaDefs,
+      primitives.toMap
     )
 
 
 def resolveNames(ast: Toplevel): ResolvedNames =
-  val resolved = MutableResolvedNames(mutable.Map(), mutable.Map(), mutable.Map(), mutable.Set(), mutable.Map())
+  val resolved = MutableResolvedNames(mutable.Map(), mutable.Map(), mutable.Map(), mutable.Set(), mutable.Map(), mutable.Map())
   resolveNames(ast, Context(Map(), Map(), Option.empty, Map(), Map()))(using resolved)
   val schemaDefs = ast.statements.collect { case schemaDef: Statement.SchemaDef => schemaDef }.toSet
   resolved.toResolvedNames(schemaDefs)
@@ -125,7 +128,9 @@ private def resolveUsedSchema(expr: SchemaExpr, ctx: Context)(using resolved: Mu
       leaf.dimArgs.existentials.foreach(resolveExistentialDim(_, ctx))
       leaf.schemaRef match
         case builtin: SchemaRef.Builtin =>
-          resolved.schemaNames.put(leaf.schemaRef, getBindingOfPrimitive(builtin.primitive))
+          val binding = getBindingOfPrimitive(builtin.primitive)
+          resolved.primitives.put(builtin.primitive, binding)
+          resolved.schemaNames.put(leaf.schemaRef, binding)
         case named: SchemaRef.Named =>
           ctx(named) match
             case Some(binding) =>

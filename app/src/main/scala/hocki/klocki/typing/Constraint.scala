@@ -22,6 +22,20 @@ enum Constraint:
     case InductionUnnamed(from, to) => s"$from ==> $to"
     case InductionNamed(dim, from, to) => s"$from ==$dim=> $to"
   
+  def conforms(dims: Set[Dim], dimSetVars: Set[DimSetVar]): Boolean = this match
+    case In(dim, dimSetVar) => dims.contains(dim) && dimSetVars.contains(dimSetVar)
+    case InUnion(dim, union) => dims.contains(dim) && union.forall(dimSetVars.contains)
+    case NotIn(dim, dimSetVar) => dims.contains(dim) && dimSetVars.contains(dimSetVar)
+    case DependsOnAll(dim, filteredDimSetVar) => dims.contains(dim) 
+      && dimSetVars.contains(filteredDimSetVar.dimSetVar) 
+      && filteredDimSetVar.filteredDimensions.forall(dims.contains)
+    case DependsOnDim(depender, dependency) => dims.contains(depender) && dims.contains(dependency)
+    case MinIn(dim, filteredDimSetVar) => dims.contains(dim)
+      && dimSetVars.contains(filteredDimSetVar.dimSetVar)
+      && filteredDimSetVar.filteredDimensions.forall(dims.contains)
+    case InductionNamed(dim, from, to) => dims.contains(dim) && dimSetVars.contains(from) && dimSetVars.contains(to)
+    case InductionUnnamed(from, to) => dimSetVars.contains(from) && dimSetVars.contains(to)
+
   def mapDimSetVars(mapping: Map[DimSetVar, DimSetVar]): Constraint = this match
     case In(dim, dimSetVar) => In(dim, mapping(dimSetVar))
     case InUnion(dim, union) => InUnion(dim, union.map(mapping))

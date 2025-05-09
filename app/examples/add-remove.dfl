@@ -1,19 +1,7 @@
-global a
-
-def main = [X | Y]
-    use f [X | Y] as AddA
-    use g [X | Y] as RemoveA
+def main = <a|>[X | Y]
+    use +a [X | Y] as AddA
+    use -a [X | Y] as RemoveA
     link
         X >-> AddA.X,
         AddA.Y >-> RemoveA.X,
         RemoveA.Y >-> Y
-
-def f = [X | Y]
-    use +a [X | Y] as AddA
-    link
-        X >-> AddA.X, AddA.Y >-> Y
-
-def g = [X | Y]
-    use -a [X | Y] as RemoveA
-    link
-        X >-> RemoveA.X, RemoveA.Y >-> Y

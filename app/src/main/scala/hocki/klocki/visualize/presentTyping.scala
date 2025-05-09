@@ -4,6 +4,7 @@ import hocki.klocki.ast.schema.SchemaBinding
 import hocki.klocki.typing.{Constraint, SchemaTy}
 
 def presentTyping(typing: Map[SchemaBinding, SchemaTy]): String =
+  println(s"Schema typing: $typing")
   typing.map((schema, ty) =>
     val universals = ty.iface.universals.mkString(", ")
     val existentials = ty.iface.existentials.mkString(", ")

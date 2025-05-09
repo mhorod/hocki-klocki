@@ -3,7 +3,7 @@ package hocki.klocki.pipeline
 import hocki.klocki.analysis.resolveNames
 import hocki.klocki.ast.Toplevel
 import hocki.klocki.parsing.DflParser
-import hocki.klocki.typing.{SchemaTy, inferTypes}
+import hocki.klocki.typing.{SchemaTy, inferTypes, instantiateSchemata}
 import hocki.klocki.visualize.graph.{buildProgram, programToJson}
 import hocki.klocki.visualize.presentTyping
 
@@ -32,7 +32,9 @@ def runPipeline
       typingFilename match
         case Some(filename) =>
           val typing =
-            try inferTypes(tree, names)
+            try 
+              val schemata = instantiateSchemata(tree, names)
+              inferTypes(schemata, names.primitives)
             catch
               case e: StackOverflowError =>
                 writeToFile("typing poszedł w buraki", filename)
