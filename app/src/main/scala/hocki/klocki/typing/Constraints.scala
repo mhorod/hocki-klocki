@@ -8,11 +8,17 @@ import scala.collection.mutable
 class Constraints:
   private val mutableConstraints = mutable.Set[Constraint]()
 
+  def this(constraints: Set[Constraint]) = 
+    this()
+    mutableConstraints.addAll(constraints)
+  
   def constraints: Set[Constraint] = mutableConstraints.toSet
 
   def addAll(newConstraints: Iterable[Constraint]): Unit = mutableConstraints.addAll(newConstraints)
 
   def add(constraint: Constraint): Unit = addAll(List(constraint))
+  
+  def remove(constraint: Constraint): Unit = mutableConstraints.remove(constraint)
 
   def contains(constraint: Constraint): Boolean = mutableConstraints.contains(constraint)
 

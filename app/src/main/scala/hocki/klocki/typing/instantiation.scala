@@ -2,17 +2,15 @@ package hocki.klocki.typing
 
 import hocki.klocki.analysis.ResolvedNames
 import hocki.klocki.ast.Abstra.OnIface
-import hocki.klocki.ast.Statement.{BlockUse, LocalExistentialDim, SchemaDef}
+import hocki.klocki.ast.Statement.{LocalExistentialDim, SchemaDef}
 import hocki.klocki.ast.dim.{DimArgs, DimBinding, DimParams}
 import hocki.klocki.ast.schema.SchemaExpr.Leaf
-import hocki.klocki.ast.schema.{IfaceBinding, SchemaBinding, SchemaExpr, SchemaRef}
+import hocki.klocki.ast.schema.{IfaceBinding, SchemaBinding, SchemaExpr}
 import hocki.klocki.ast.vertex.VertexBinding
 import hocki.klocki.ast.{Abstra, Statement, Toplevel}
 import hocki.klocki.entities.{Dim, DimSetVar}
-import hocki.klocki.typing.Constraint.InductionUnnamed
 
 import scala.collection.immutable
-import scala.collection.mutable
 
 private case class SchemaDims
 (
@@ -57,7 +55,9 @@ def createDimSetVars(schemaDef: SchemaDef): SchemaDimSetVars =
   val impl = schemaDef.impl.asInstanceOf[OnIface]
   val ins = instantiateBound[VertexBinding, DimSetVar](impl.iface.suppliers, DimSetVar(_))
   val outs = instantiateBound[VertexBinding, DimSetVar](impl.iface.consumers, DimSetVar(_))
-  val internal = impl.blockUses.flatMap(use => instantiateBound(use.iface.allVerticesInOrder, DimSetVar(_))).toMap
+  val internal = impl.blockUses.flatMap(use =>
+    instantiateBound(use.iface.allVerticesInOrder, s => DimSetVar(s"${use.name.getOrElse("_")}.$s"))
+  ).toMap
   SchemaDimSetVars(ins, outs, internal)
 
 def instantiateSchemata

@@ -1,6 +1,6 @@
 package hocki.klocki.typing
 
-import hocki.klocki.typing.Constraint.{InductionNamed, InductionUnnamed, NotIn, In}
+import hocki.klocki.typing.Constraint.{In, InUnion, InductionNamed, InductionUnnamed, NotIn}
 
 object ComposeInductionsNamed extends ConstraintObserver:
   override def observe
@@ -22,16 +22,11 @@ object ComposeInductionsUnnamed extends ConstraintObserver:
         lhs ++ rhs
       case _ => Set()
 
-
 object PropagateNotInsUp extends ConstraintObserver:
   override def observe(newConstraint: Constraint, constraints: Constraints): Set[Constraint] =
     newConstraint match
       case NotIn(dim, dimSetVar) =>
         constraints.findInductionsNamedByRhs(dim, dimSetVar).map(induction => NotIn(dim, induction.from))
-      case InductionNamed(dim, from, to) =>
-        if constraints.contains(NotIn(dim, to)) then
-          Set(NotIn(dim, from))
-        else Set()
       case _ => Set()
 
 object PropagateInsDown extends ConstraintObserver:
@@ -40,8 +35,19 @@ object PropagateInsDown extends ConstraintObserver:
       case In(dim, dimSetVar) =>
         constraints.findInductionsNamedByLhs(dim, dimSetVar)
           .map(induction => In(dim, induction.to))
-      case InductionNamed(dim, from, to) =>
-        if constraints.contains(In(dim, from)) then
-          Set(In(dim, to))
-        else Set()
+      case _ => Set()
+
+class PropagateInUnionsUp(ifaces: Set[SchemaIface]) extends ConstraintObserver:
+  private val ifaceDimSetVars = ifaces.flatMap(_.allDimSetVars)
+
+  override def observe(newConstraint: Constraint, constraints: Constraints): Set[Constraint] =
+    newConstraint match
+      case InUnion(dim, union) =>
+        Set(
+          dim inUnion union.flatMap(
+            dsv => constraints.findInductionsNamedByRhs(dim, dsv)
+              .map(_.from)
+              .intersect(ifaceDimSetVars)
+          )
+        )
       case _ => Set()
