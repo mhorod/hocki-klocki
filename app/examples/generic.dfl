@@ -14,14 +14,7 @@ def g = <x, y, z | u, v, w> [X | Y]
         NewV.Y >-> NewW.X,
         NewW.Y >-> Y
 
-global a
-global b
-global c
-
-def main = [X | Y]
-    exists uu
-    exists vv
-    exists ww
+def main = <a, b, c |> [X | Y]
     use g<a, b, c | uu, vv, ww> [X | Y] as G
     link
         X >-> G.X,

@@ -1,7 +1,4 @@
-global a
-global b
-
-def parallel = [X0, X1 | Y]
+def parallel = <a, b |> [X0, X1 | Y]
     use U{2}[L, R | Out] as FirstUnion
     use -a[In | Out] as RemoveA
     use -b[In | Out] as RemoveB

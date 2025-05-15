@@ -1,6 +1,4 @@
-global a
-
-def main = [X | Y]
+def main = <a|> [X | Y]
     use +a [X | Y] as FirstAddA
     use +a [X | Y] as SecondAddA
     link

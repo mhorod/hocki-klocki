@@ -1,8 +1,9 @@
 def main = <|a, b> [|]
     use f<|a> [X | Y] as FA
     use f<|b> [X | Y] as FB
+    use f<|c> [X | Y] as FC
     link
-        FA.Y >-> FB.X, FB.Y >-> FA.X
+        FA.Y >-> FB.X, FB.Y >-> FA.X, FC.Y >-> FC.X
 
 
 def f = <|a> [X | Y]

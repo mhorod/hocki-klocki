@@ -10,4 +10,3 @@ def main = <|a, b> [X|Y1, Y2]
      RemoveA2.Y >-> AddA.X,
      AddA.Y >-> Y1,
      RemoveA.Y >-> Y2
-g

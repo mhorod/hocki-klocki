@@ -1,7 +1,7 @@
 package hocki.klocki.ast
 
 import hocki.klocki.ast.Statement.BlockUse
-import hocki.klocki.ast.dim.{DimBinding, DimParams, DimRef}
+import hocki.klocki.ast.dim.DimParams
 import hocki.klocki.ast.schema.{IfaceBinding, SchemaBinding, SchemaExpr}
 import hocki.klocki.ast.vertex.{BlockId, VertexRef}
 import hocki.klocki.utils.{Tree, toParenthesesString}
@@ -31,11 +31,6 @@ object Abstra:
 
 sealed trait ToplevelStatement extends AstNode
 
-class GlobalDim(val binding: DimBinding, val dependsOn: List[DimRef]) extends ToplevelStatement:
-  override def children: List[AstNode] = List()
-
-  override def toString: String = s"global $binding depends on $dependsOn}"
-
 sealed trait Statement extends ToplevelStatement
 
 object Statement:
@@ -48,11 +43,6 @@ object Statement:
     override def children: List[Nothing] = List()
 
     override def toString: String = s"use ${expr.toParenthesesString} $iface"
-
-  class LocalExistentialDim(val binding: DimBinding) extends Statement:
-    override def children: List[AstNode] = List()
-
-    override def toString: String = s"exists $binding"
 
 sealed abstract class VertexUse(val ref: VertexRef) extends AstNode:
   override def children: List[Nothing] = List()

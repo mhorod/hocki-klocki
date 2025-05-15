@@ -1,11 +1,10 @@
 package hocki.klocki.parsing
 
 import hocki.klocki.ast.schema.SchemaRef.Builtin
-import hocki.klocki.ast.Statement.LocalExistentialDim
 import hocki.klocki.ast.dim.{DimArgs, DimBinding, DimId, DimParams, DimRef}
 import hocki.klocki.ast.schema.{Primitive, IfaceBinding, SchemaBinding, SchemaExpr, SchemaId, SchemaRef}
 import hocki.klocki.ast.vertex.{BlockId, VertexBinding, VertexId, VertexRef}
-import hocki.klocki.ast.{Abstra, ConnectionDecl, GlobalDim, Link, Statement, Toplevel, ToplevelStatement, VertexUse}
+import hocki.klocki.ast.{Abstra, ConnectionDecl, Link, Statement, Toplevel, ToplevelStatement, VertexUse}
 import hocki.klocki.entities.Dim
 
 import scala.util.parsing.combinator.RegexParsers
@@ -13,19 +12,13 @@ import scala.util.parsing.combinator.RegexParsers
 object DflParser extends RegexParsers:
   def program: Parser[Toplevel] = phrase(toplevel)
 
-  private def toplevel: Parser[Toplevel] = rep(toplevelStatement) ~ opt(link) ^^ {
+  private def toplevel: Parser[Toplevel] = rep(statement) ~ opt(link) ^^ {
     case statements ~ link => Toplevel(statements, link)
   }
 
   // Statement
-
-  private def toplevelStatement: Parser[ToplevelStatement] = globalDim | statement
   
-  private def statement: Parser[Statement] = schemaDef | blockUse | localExistentialDim
-
-  private def globalDim: Parser[GlobalDim] = ("global" ~> dimBinding) ~ opt("depends on" ~> dimRefList) ^^ {
-    case dimBinding ~ dimRefList => GlobalDim(dimBinding, dimRefList.getOrElse(List()))
-  }
+  private def statement: Parser[Statement] = schemaDef | blockUse
   
   private def schemaDef: Parser[Statement.SchemaDef] =
     ("def" ~> schemaId) ~ ("=" ~> (opt(dimParams) ~ abstra)) ^^ {
@@ -37,9 +30,6 @@ object DflParser extends RegexParsers:
     ("use" ~> schemaExpr) ~ externalIfaceBinding ~ opt("as" ~> blockId) ^^ {
       case expr ~ ifaceDef ~ blockId => Statement.BlockUse(expr, ifaceDef, blockId)
     }
-
-  private def localExistentialDim: Parser[Statement.LocalExistentialDim] =
-    ("exists" ~> dimBinding) ^^ { LocalExistentialDim(_) }
 
   // Iface
 
@@ -92,15 +82,15 @@ object DflParser extends RegexParsers:
     ref => (Primitive.Add(), DimArgs(List(ref), List()))
   }
 
-  private def builtinAddExistential: Parser[(Primitive.Spawn, DimArgs)] = "*" ~> dimRef ^^ {
-    ref => (Primitive.Spawn(), DimArgs(List(), List(ref)))
+  private def builtinAddExistential: Parser[(Primitive.Spawn, DimArgs)] = "*" ~> dimBinding ^^ {
+    binding => (Primitive.Spawn(), DimArgs(List(), List(binding)))
   }
 
   private def builtinRemove: Parser[(Primitive.Remove, DimArgs)] = "-" ~> dimRef ^^ {
     ref => (Primitive.Remove(), DimArgs(List(ref), List()))
   }
   
-  private def dimArgs: Parser[DimArgs] = angleBracketed(dimRefList ~ ("|" ~> dimRefList)) ^^ {
+  private def dimArgs: Parser[DimArgs] = angleBracketed(dimRefList ~ ("|" ~> dimBindingList)) ^^ {
     case universals ~ existentials => DimArgs(universals, existentials)
   }
 
@@ -111,7 +101,7 @@ object DflParser extends RegexParsers:
   // Abstra
   private def abstra: Parser[Abstra] = onIface | onSchema
 
-  private def dimParams: Parser[DimParams] = angleBracketed(dimBindingList ~ ("|" ~> dimBindingList)) ^^ {
+  private def dimParams: Parser[DimParams] = angleBracketed(dimBindingList ~ ("|" ~> dimRefList)) ^^ {
     case universals ~ existentials => DimParams(universals, existentials)
   }
 

@@ -1,7 +1,9 @@
 package hocki.klocki.typing
 
 import hocki.klocki.ast.schema.{Primitive, SchemaBinding}
-import hocki.klocki.typing.Constraint.{In, NotIn, InUnion, InductionNamed, InductionUnnamed}
+import hocki.klocki.entities.Dim
+import hocki.klocki.typing.Constraint.{Distinct, In, InUnion, InductionNamed, InductionUnnamed, NotExistential, NotIn}
+import hocki.klocki.visualize.presentTyping
 
 import scala.collection.mutable
 
@@ -26,47 +28,85 @@ class RulesPhase(ruleList: ConstraintObserver*)(using schemata: Map[SchemaBindin
     while worklist.nonEmpty do
       val constraint = worklist.head
       worklist.remove(constraint)
-      inferred.add(constraint)
-
-      schemaBindings.flatMap(
-          b => tagWithSchema(b, observeConstraint(constraint, b, schemata(b), schemaConstraints(b), rules))
-        ).filterNot(inferred.contains)
-        .foreach(worklist.add)
+      if inferred.add(constraint) then
+        schemaBindings
+          .flatMap(
+            b => tagWithSchema(b, observeConstraint(constraint, b, schemata(b), schemaConstraints(b), rules))
+          )
+          .filterNot(inferred.contains)
+          .foreach(worklist.add)
 
     groupBySchema(inferred.toSet)
 
-class PruneSatisfiedUnionsPhase extends Phase:
-  override def apply(constraints: SchemaConstraints): SchemaConstraints =
-    val ins = getConstraints[In](constraints)
-    constraints.view.mapValues(
-      _.filter {
-        case InUnion(dim, union) => !union.exists(dsv => ins.contains(dim in dsv))
-        case other => true
-      }
-    ).toMap
-
-class ReduceUnionsPhase extends Phase:
+object ReduceUnionsPhase extends Phase:
   override def apply(constraints: SchemaConstraints): SchemaConstraints =
     val notIns = getConstraints[NotIn](constraints)
 
     constraints.view.mapValues(
       _.map {
-        case InUnion(dim, union) => dim inUnion union.filterNot(dsv => notIns.contains(dim notIn dsv))
+        case InUnion(dim, union) =>
+          val reduced = dim inUnion union.filterNot(dsv => notIns.contains(dim notIn dsv))
+          if reduced.union.isEmpty then
+            throw IllegalStateException(s"Typing poszedł w brukselkę: $reduced") // taka unijna rzepa
+          reduced
         case other => other
       }
     ).toMap
+
+object GuardDistinctPhase extends Phase:
+  override def apply(constraints: SchemaConstraints): SchemaConstraints =
+    constraints.tapEach((schema, cs) =>
+      cs.foreach {
+        case distinct@Distinct(lhs, rhs) if lhs == rhs =>
+          throw IllegalStateException(s"Typing poszedł w chrzan (schrzanił się): $distinct in schema ${schema.id}")
+        case other => ()
+      }
+    )
+
+class GuardExistentialsPhase(schemata: Map[SchemaBinding, Schema]) extends Phase:
+  override def apply(constraints: SchemaConstraints): SchemaConstraints =
+    constraints.map((schemaBinding, schemaConstraints) =>
+      val schema = schemata(schemaBinding)
+      val locals = schema.internals.localDims
+      schemaBinding -> schemaConstraints.flatMap {
+        case in: In => guardLeak(in, schema)
+        case inUnion: InUnion => guardLeak(inUnion, schema)
+        case distinct: Distinct => ignoreLeak(distinct, schema.allExistentials)
+        case notExistential: NotExistential =>
+          if schema.allExistentials.contains(notExistential.dim) then
+            throw IllegalStateException(s"Typing poszedł w dynię: ${notExistential.dim} cannot be existential")
+          Set(notExistential)
+        case other => ignoreLeak(other, locals)
+      }
+    )
+
+private def guardLeak(constraint: Constraint, schema: Schema): Set[Constraint] =
+  val leaking = schema.internals.localDims intersect constraint.dims
+  val leaks = leaking.nonEmpty && (constraint.dimSetVars subsetOf schema.iface.allDimSetVars)
+  if leaks then
+    val plural = if leaking.size == 1 then "s" else ""
+    throw IllegalStateException(s"Typing poszedł w pora: ${leaking.mkString(", ")} leak$plural through $constraint")
+  Set(constraint)
+
+private def ignoreLeak(constraint: Constraint, locals: Set[Dim]): Set[Constraint] =
+  if (locals intersect constraint.dims).nonEmpty then
+    Set()
+  else
+    Set(constraint)
 
 def inferTypes(schemata: Map[SchemaBinding, Schema], primitives: Map[Primitive, SchemaBinding]): Map[SchemaBinding, SchemaTy] =
 
   given Map[SchemaBinding, Schema] = schemata
 
-  val phases = List(
+  val phases: List[Phase] = List(
     RulesPhase(ComposeInductionsNamed, ComposeInductionsUnnamed),
     RulesPhase(PropagateInsDown),
     RulesPhase(PropagateNotInsUp),
-    PruneSatisfiedUnionsPhase(),
     RulesPhase(PropagateInUnionsUp(schemata.values.map(_.iface).toSet)),
-    ReduceUnionsPhase()
+    ReduceUnionsPhase,
+    RulesPhase(RequireDistinct),
+    GuardDistinctPhase,
+    GuardExistentialsPhase(schemata),
   )
 
   val primitiveConstraints = primitives.flatMap(
@@ -91,12 +131,16 @@ def inferTypes(schemata: Map[SchemaBinding, Schema], primitives: Map[Primitive, 
 
   val inferred = inferInPhases(phases, initialConstraints)
 
-  inferred.map((b, constraints) =>
+  val tys = inferred.map((b, constraints) =>
     b -> SchemaTy(
       schemata(b).iface,
       filterRelevantConstraints(constraints, schemata(b).iface)
     )
   )
+
+  println(presentTyping(tys))
+
+  tys
 
 def inferInPhases
 (

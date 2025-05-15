@@ -1,6 +1,6 @@
 package hocki.klocki.typing
 
-import hocki.klocki.typing.Constraint.{In, InUnion, InductionNamed, InductionUnnamed, NotIn}
+import hocki.klocki.typing.Constraint.{Distinct, In, InUnion, InductionNamed, InductionUnnamed, NotIn}
 
 object ComposeInductionsNamed extends ConstraintObserver:
   override def observe
@@ -32,9 +32,9 @@ object PropagateNotInsUp extends ConstraintObserver:
 object PropagateInsDown extends ConstraintObserver:
   override def observe(newConstraint: Constraint, constraints: Constraints): Set[Constraint] =
     newConstraint match
-      case In(dim, dimSetVar) =>
+      case in@In(dim, dimSetVar) =>
         constraints.findInductionsNamedByLhs(dim, dimSetVar)
-          .map(induction => In(dim, induction.to))
+          .map(induction => dim in induction.to)
       case _ => Set()
 
 class PropagateInUnionsUp(ifaces: Set[SchemaIface]) extends ConstraintObserver:
@@ -43,11 +43,29 @@ class PropagateInUnionsUp(ifaces: Set[SchemaIface]) extends ConstraintObserver:
   override def observe(newConstraint: Constraint, constraints: Constraints): Set[Constraint] =
     newConstraint match
       case InUnion(dim, union) =>
-        Set(
-          dim inUnion union.flatMap(
-            dsv => constraints.findInductionsNamedByRhs(dim, dsv)
-              .map(_.from)
-              .intersect(ifaceDimSetVars)
+        if union.exists(dsv => constraints.contains(dim in dsv)) then
+          Set()
+        else
+          Set(
+            dim inUnion union.flatMap(
+              dsv => constraints.findInductionsNamedByRhs(dim, dsv)
+                .map(_.from)
+                .intersect(ifaceDimSetVars)
+            )
           )
-        )
       case _ => Set()
+
+object RequireDistinct extends ConstraintObserver:
+  override def observe(newConstraint: Constraint, constraints: Constraints): Set[Constraint] =
+    newConstraint match
+      case notIn@NotIn(dim, dsv) =>
+        constraints.findInByDimSetVar(dsv).flatMap(in => guardRadish(in, notIn))
+      case in@In(dim, dsv) =>
+        constraints.findNotInByDimSetVar(dsv).flatMap(notIn => guardRadish(in, notIn))
+      case _ => Set()
+
+private def guardRadish(in: In, notIn: NotIn): Set[Distinct] =
+  if in.dim == notIn.dim && in.dimSetVar == notIn.dimSetVar then
+    throw new IllegalStateException(s"Typing poszedł w rzodkiew: $in and $notIn")
+  Set(Distinct(in.dim, notIn.dim), Distinct(notIn.dim, in.dim))
+

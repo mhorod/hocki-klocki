@@ -1,0 +1,9 @@
+
+def distinctByAdd = <a, b|>[X|Y]
+    use +a [X | Y] as AddA
+    use +b [X | Y] as AddB
+    link X >-> AddA.X, AddA.Y >-> AddB.X, AddB.Y >-> Y
+
+def main = <a|> [X | Y]
+    use distinctByAdd<a, a|>[X|Y] as S
+    link X >-> S.X, S.Y >-> Y

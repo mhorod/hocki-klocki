@@ -1,7 +1,4 @@
-global a
-global b
-
-def funny = [X0, X1 | Y0, Y1]
+def funny = <a, b |> [X0, X1 | Y0, Y1]
     use +a[In | Out] as AddA
     use -b[In | Out] as RemoveB
     link
@@ -10,9 +7,9 @@ def funny = [X0, X1 | Y0, Y1]
         X1 >-> RemoveB.In,
         RemoveB.Out >-> Y1
 
-def funny_sequential = [X0, X1 | Y0, Y1]
-    use funny[X0, X1 | Y0, Y1] as Fst
-    use funny[X0, X1 | Y0, Y1] as Snd
+def funny_sequential = <a, b |> [X0, X1 | Y0, Y1]
+    use funny<a, b |> [X0, X1 | Y0, Y1] as Fst
+    use funny<a, b |> [X0, X1 | Y0, Y1] as Snd
     link
         X0 >-> Fst.X0,
         X1 >-> Fst.X1,
@@ -21,9 +18,9 @@ def funny_sequential = [X0, X1 | Y0, Y1]
         Snd.Y0 >-> Y0,
         Snd.Y1 >-> Y1
 
-def funny_parallel = [X0, X1 | Y0]
-    use funny[X0, X1 | Y0, Y1] as Fst
-    use funny[X0, X1 | Y0, Y1] as Snd
+def funny_parallel = <a, b |> [X0, X1 | Y0]
+    use funny<a, b |> [X0, X1 | Y0, Y1] as Fst
+    use funny<a, b |> [X0, X1 | Y0, Y1] as Snd
     use U{4}[V0, V1, V2, V3 | W]
     link
         X0 >-> Fst.X0,

@@ -1,13 +1,13 @@
 package hocki.klocki.analysis
 
-import hocki.klocki.ast.Statement.{LocalExistentialDim, SchemaDef}
+import hocki.klocki.ast.Statement.{BlockUse, SchemaDef}
 import hocki.klocki.ast.dim.{DimBinding, DimId, DimRef}
-
+import hocki.klocki.ast.schema.SchemaExpr.Leaf
 import hocki.klocki.ast.schema.{Primitive, SchemaBinding, SchemaExpr, SchemaId, SchemaRef}
 import hocki.klocki.ast.vertex.{BlockId, VertexBinding, VertexId, VertexRef}
 
 import scala.collection.mutable
-import hocki.klocki.ast.{Abstra, AstNode, ConnectionDecl, GlobalDim, Link, Statement, Toplevel, ToplevelStatement, VertexUse}
+import hocki.klocki.ast.{Abstra, AstNode, ConnectionDecl, Link, Statement, Toplevel, ToplevelStatement, VertexUse}
 
 import scala.annotation.targetName
 
@@ -26,8 +26,8 @@ class ResolvedNames
   val vertexNames: Map[VertexUse, VertexBinding],
   val schemaNames: Map[SchemaRef, SchemaBinding],
   val dimNames: Map[DimRef, DimBinding],
-  val globalDims: Set[DimBinding],
-  val localExistentialDims: Map[SchemaBinding, Set[DimBinding]],
+  val allExistentials: Map[SchemaBinding, Set[DimBinding]],
+  val ifaceExistentials: Map[SchemaBinding, Set[DimBinding]],
   val schemaDefs: Set[SchemaDef],
   val primitives: Map[Primitive, SchemaBinding]
 ):
@@ -38,9 +38,9 @@ class MutableResolvedNames
 (
   val vertexNames: mutable.Map[VertexUse, VertexBinding],
   val schemaNames: mutable.Map[SchemaRef, SchemaBinding],
+  val allExistentials: mutable.Map[SchemaBinding, Set[DimBinding]],
+  val ifaceExistentials: mutable.Map[SchemaBinding, Set[DimBinding]],
   val dimNames: mutable.Map[DimRef, DimBinding],
-  val globalDims: mutable.Set[DimBinding],
-  val localExistentialDims: mutable.Map[SchemaBinding, mutable.Set[DimBinding]],
   val primitives: mutable.Map[Primitive, SchemaBinding]
 ):
   def toResolvedNames(schemaDefs: Set[SchemaDef]): ResolvedNames =
@@ -48,15 +48,15 @@ class MutableResolvedNames
       vertexNames.toMap,
       schemaNames.toMap,
       dimNames.toMap,
-      globalDims.toSet,
-      localExistentialDims.toMap.map((k, v) => k -> v.toSet),
+      allExistentials.toMap,
+      ifaceExistentials.toMap,
       schemaDefs,
       primitives.toMap
     )
 
 
 def resolveNames(ast: Toplevel): ResolvedNames =
-  val resolved = MutableResolvedNames(mutable.Map(), mutable.Map(), mutable.Map(), mutable.Set(), mutable.Map(), mutable.Map())
+  val resolved = MutableResolvedNames(mutable.Map(), mutable.Map(), mutable.Map(), mutable.Map(), mutable.Map(), mutable.Map())
   resolveNames(ast, Context(Map(), Map(), Option.empty, Map(), Map()))(using resolved)
   val schemaDefs = ast.statements.collect { case schemaDef: Statement.SchemaDef => schemaDef }.toSet
   resolved.toResolvedNames(schemaDefs)
@@ -67,12 +67,7 @@ private def resolveNames(node: AstNode, ctx: Context)(using resolved: MutableRes
       resolveSequential(
         toplevel.statements ++ toplevel.link,
         ctx.withSchemata(toplevelSchemaDefs(toplevel.statements))
-          .withGlobalDims(toplevelGlobalDims(toplevel.statements).map(_.binding))
       )
-      ctx
-    case globalDim: GlobalDim =>
-      globalDim.dependsOn.foreach(resolveDim(_, ctx))
-      resolved.globalDims.add(globalDim.binding)
       ctx
     case abstra: Abstra =>
       abstra match
@@ -81,18 +76,24 @@ private def resolveNames(node: AstNode, ctx: Context)(using resolved: MutableRes
             onIface.body :+ onIface.link,
             (ctx + onIface.iface.allVerticesInOrder)
               .withSchemata(schemaDefs(onIface.body))
-              .withExistentialDims(localExistentialDims(onIface.body).map(_.binding))
+              .withExistentialDims(getExistentialDims(onIface))
           )
         case onSchema: Abstra.OnSchema => resolveNames(onSchema.impl, ctx + onSchema.binding)
       ctx
     case statement: Statement =>
       statement match
         case schemaDef: Statement.SchemaDef =>
-          resolved.localExistentialDims.put(schemaDef.binding, mutable.Set())
+          val allExistentials = getExistentialDims(schemaDef)
+          val ctxWithExistentials = ctx.withExistentialDims(allExistentials)
+          val ifaceExistentials = schemaDef.params.existentials.map(ref =>
+            resolveExistentialDim(ref, ctxWithExistentials)
+            resolved.dimNames(ref)
+          )
+          resolved.allExistentials.put(schemaDef.binding, allExistentials.toSet)
+          resolved.ifaceExistentials.put(schemaDef.binding, ifaceExistentials.toSet)
           resolveNames(schemaDef.impl,
-            ctx
+            ctxWithExistentials
               .withUniversalDims(schemaDef.params.universals)
-              .withExistentialDims(schemaDef.params.existentials)
               .withCurrentSchema(schemaDef.binding)
           )
           ctx
@@ -102,9 +103,6 @@ private def resolveNames(node: AstNode, ctx: Context)(using resolved: MutableRes
           use.name match
             case Some(name) => ctx + (name, all)
             case None => ctx + all
-        case localExistentialDim: LocalExistentialDim =>
-          resolved.localExistentialDims(ctx.currentSchema.get).add(localExistentialDim.binding)
-          ctx
     case use: VertexUse =>
       ctx(use.ref) match
         case Some(binding) => resolved.vertexNames.put(use, binding)
@@ -125,7 +123,6 @@ private def resolveUsedSchema(expr: SchemaExpr, ctx: Context)(using resolved: Mu
   expr match
     case leaf: SchemaExpr.Leaf =>
       leaf.dimArgs.universals.foreach(resolveDim(_, ctx))
-      leaf.dimArgs.existentials.foreach(resolveExistentialDim(_, ctx))
       leaf.schemaRef match
         case builtin: SchemaRef.Builtin =>
           val binding = getBindingOfPrimitive(builtin.primitive)
@@ -161,14 +158,23 @@ private def resolveGlobalDim(ref: DimRef, ctx: Context)(using resolved: MutableR
 private def toplevelSchemaDefs(statements: List[ToplevelStatement]): List[SchemaDef] =
   statements.collect { case s: SchemaDef => s }
 
-private def toplevelGlobalDims(statements: List[ToplevelStatement]): List[GlobalDim] =
-  statements.collect { case s: GlobalDim => s }
-
 private def schemaDefs(statements: List[Statement]): List[SchemaDef] =
   statements.collect { case s: SchemaDef => s }
 
-private def localExistentialDims(statements: List[Statement]): List[LocalExistentialDim] =
-  statements.collect { case s: LocalExistentialDim => s }
+def getExistentialDims(blockUses: List[BlockUse]): List[DimBinding] =
+  val bindingsInOrder = blockUses.flatMap {
+    use => use.expr.asInstanceOf[Leaf].dimArgs.existentials
+  }
+  val names = bindingsInOrder.map(_.id)
+  if names.size != names.toSet.size then
+    throw IllegalStateException("Multiple definitions of an existential dim")
+  bindingsInOrder
+
+def getExistentialDims(schemaDef: SchemaDef): List[DimBinding] =
+  getExistentialDims(schemaDef.impl.asInstanceOf[Abstra.OnIface])
+
+def getExistentialDims(abstra: Abstra.OnIface): List[DimBinding] =
+  getExistentialDims(abstra.body.collect { case blockUse : BlockUse => blockUse })
 
 private class Context
 (

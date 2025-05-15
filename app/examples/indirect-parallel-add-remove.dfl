@@ -1,8 +1,6 @@
 def f = [X | Y] link X >-> Y
 
-global a
-
-def main = [X | Y1, Y2]
+def main = <a |> [X | Y1, Y2]
   use f [X | Y] as F1
   use f [X | Y] as F2
   use f [X | Y] as F3

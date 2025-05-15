@@ -1,6 +1,4 @@
-global a
-
-def sus = [X | Y0, Y1]
+def sus = <a |> [X | Y0, Y1]
     use +a[In | Out] as AddA
     use -a[In | Out] as RemoveA
     link

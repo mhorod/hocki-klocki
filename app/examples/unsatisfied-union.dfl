@@ -1,6 +1,4 @@
-global a
-
-def main = [X0, X1 | Y]
+def main = <a |> [X0, X1 | Y]
     use -a [X | Y] as RemA0
     use U{2} [X0, X1 | Y] as Union
     use -a [X | Y] as RemA1

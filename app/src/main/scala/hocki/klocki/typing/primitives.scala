@@ -5,6 +5,7 @@ import hocki.klocki.analysis.ResolvedNames
 import hocki.klocki.ast.dim.DimBinding
 import hocki.klocki.ast.schema.Primitive
 import hocki.klocki.entities.{Dim, DimSetVar}
+import hocki.klocki.typing.Constraint.NotExistential
 
 def getTypeOfPrimitive(primitive: Primitive): SchemaTy = primitive match
   case Primitive.Union(n) => tysOfUnions(n)
@@ -38,9 +39,10 @@ private def generateTyOfExtendWithDim(isUniversalDim: Boolean): SchemaTy =
     dim in y,
     x ~~> y,
   )
+  val quantificationConstraints = if isUniversalDim then Set(NotExistential(dim)) else Set()
   val (universals, existentials) = if isUniversalDim then (List(dim), List()) else (List(), List(dim))
   val iface = SchemaIface(universals, existentials, List(x), List(y))
-  SchemaTy(iface, constraints)
+  SchemaTy(iface, constraints ++ quantificationConstraints)
 
 private def generateTyOfUnion(arity: Int): SchemaTy =
   val xs = (0 until arity).map(i => DimSetVar(s"X$i")).toList

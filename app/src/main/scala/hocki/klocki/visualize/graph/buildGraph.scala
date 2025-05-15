@@ -1,13 +1,10 @@
 package hocki.klocki.visualize.graph
 
-import hocki.klocki.analysis.ResolvedNames
+import hocki.klocki.analysis.{ResolvedNames, getExistentialDims}
 import hocki.klocki.ast.*
 import hocki.klocki.ast.Statement.{BlockUse, SchemaDef}
-import hocki.klocki.ast.dim.DimBinding
 import hocki.klocki.ast.schema.{SchemaBinding, SchemaExpr, SchemaRef}
-import hocki.klocki.entities.{Dim, DimSetVar}
 import hocki.klocki.names.{NameGenerator, SimpleNameGenerator}
-import hocki.klocki.visualize.graph.SchemaInterface
 
 import scala.collection.mutable
 
@@ -64,8 +61,6 @@ def buildProgram(ast: Toplevel, nr: ResolvedNames): Program =
   val schemaIds = schemaDefs.map(schemaDef => schemaDef.binding -> idGenerator.schemaId).toMap
   val builtinSchemata = builtIns.map(b => b -> fromAst(b.primitive)).toMap
   val builtinIds = builtIns.map(b => b -> builtinSchemata(b).id).toMap
-  val globalDims = extractGlobalDims(ast).map(dim => dim.binding -> idGenerator.dimId(dim.binding.id.name)).toMap
-
 
   val interfaces = schemaDefs.map(schemaDef => schemaIds(schemaDef.binding) -> createInterface(schemaDef)).toMap
     ++
@@ -78,11 +73,10 @@ def buildProgram(ast: Toplevel, nr: ResolvedNames): Program =
   )
 
   val schemata =
-    schemaDefs.map(schemaDef => buildSchema(schemaDef, nr, schemataInfo, globalDims)) ++ builtinSchemata.values
+    schemaDefs.map(schemaDef => buildSchema(schemaDef, nr, schemataInfo)) ++ builtinSchemata.values
 
   Program(
     idGenerator.getDims,
-    globalDims.values.toSet,
     idGenerator.getDimSetVars,
     schemata
   )
@@ -97,13 +91,10 @@ def createInterface
       val outVertices = onIface.iface.consumers.map(v => idGenerator.dimSetVarId(v.id.name))
       SchemaInterface(
         schemaDef.params.universals.map(binding => idGenerator.dimId(binding.id.name)),
-        schemaDef.params.existentials.map(binding => idGenerator.dimId(binding.id.name)),
+        schemaDef.params.existentials.map(ref => idGenerator.dimId(ref.dimId.name)),
         inVertices,
         outVertices,
       )
-
-def extractGlobalDims(toplevel: Toplevel): List[GlobalDim] =
-  toplevel.statements.collect { case s: GlobalDim => s }
 
 def extractSchemata(node: AstNode): List[SchemaDef] =
   val children = node.children.flatMap(extractSchemata)
@@ -127,19 +118,17 @@ def buildSchema
   schemaDef: SchemaDef,
   nr: ResolvedNames,
   schemataInfo: SchemataInfo,
-  globalDims: Map[DimBinding, DimId]
 )(using nameGenerator: NameGenerator, idGenerator: IdGenerator): Schema =
   schemaDef.impl match
     case onSchema: Abstra.OnSchema => throw UnsupportedOperationException("Higher rank is not supported yet")
-    case onIface: Abstra.OnIface => buildSchema(schemaDef, nr, schemataInfo, onIface, globalDims)
+    case onIface: Abstra.OnIface => buildSchema(schemaDef, nr, schemataInfo, onIface)
 
 def buildSchema
 (
   schemaDef: SchemaDef,
   nr: ResolvedNames,
   schemataInfo: SchemataInfo,
-  body: Abstra.OnIface,
-  globalDims: Map[DimBinding, DimId]
+  body: Abstra.OnIface
 )(using nameGenerator: NameGenerator, idGenerator: IdGenerator): Schema =
   val schemaId = schemataInfo(schemaDef.binding)
   val interface = schemataInfo.interfaces(schemaId)
@@ -156,8 +145,8 @@ def buildSchema
 
   val ifaceUniversalDims = schemaDef.params.universals.zip(interface.universalDims)
   val ifaceExistentialDims = schemaDef.params.existentials.zip(interface.existentialDims)
-  val localExistentialDims = extractLocalDims(body.body).map(dim => (dim.binding, idGenerator.dimId(dim.binding.id.name)))
-  val allDims = (ifaceUniversalDims ++ ifaceExistentialDims ++ localExistentialDims).toMap ++ globalDims
+  val localExistentialDims = getExistentialDims(body).map(binding => (binding, idGenerator.dimId(binding.id.name)))
+  val allDims = (ifaceUniversalDims ++ ifaceExistentialDims ++ localExistentialDims).toMap
 
   println(s"Local: $localExistentialDims")
   println(s"All: $allDims")
@@ -173,7 +162,7 @@ def buildSchema
           id,
           internalInterface,
           leaf.dimArgs.universals.map(ref => allDims(nr.dimNames(ref))),
-          leaf.dimArgs.existentials.map(ref => allDims(nr.dimNames(ref)))
+          leaf.dimArgs.existentials.map(binding => allDims(binding))
         )
       case app: SchemaExpr.App => throw UnsupportedOperationException("Higher rank is not supported yet")
 
@@ -182,7 +171,6 @@ def buildSchema
     val universalsMapping = iface.universalDims.zip(universals).toMap
     val existentialsMapping = iface.existentialDims.zip(existentials).toMap
 
-    println(s"schema: $schemaId, iface: ${iface.inVertices}, ${iface.outVertices}")
     val block = Block(
       internalId,
       iface.inVertices.zip(inVerticesMapping).toMap
@@ -207,6 +195,3 @@ def buildSchema
 
 def extractBlockUses(statements: List[Statement]): List[Statement.BlockUse] =
   statements.collect { case s: Statement.BlockUse => s }
-
-def extractLocalDims(statements: List[Statement]): List[Statement.LocalExistentialDim] =
-  statements.collect { case s: Statement.LocalExistentialDim => s }

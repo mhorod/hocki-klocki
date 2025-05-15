@@ -59,14 +59,12 @@ class Schema:
 @dataclass
 class Program:
     dims: dict
-    global_dims: List[int]
     dim_set_vars: dict
     schemata: List[Schema]
 
     def from_dto(obj):
         return Program(
             map_from_list_of_pairs(obj["dims"]),
-            obj["globalDims"],
             map_from_list_of_pairs(obj["dimSetVars"]),
             [Schema.from_dto(s) for s in obj["schemata"]]
         )

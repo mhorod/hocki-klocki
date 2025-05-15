@@ -39,7 +39,6 @@ case class Block
 case class Program
 (
   dims: Map[DimId, String],
-  globalDims: Set[DimId],
   dimSetVars: Map[DimSetVarId, String],
   schemata: List[Schema]
 )derives ReadWriter

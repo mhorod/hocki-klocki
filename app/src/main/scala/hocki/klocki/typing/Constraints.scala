@@ -1,7 +1,7 @@
 package hocki.klocki.typing
 
 import hocki.klocki.entities.{Dim, DimSetVar}
-import hocki.klocki.typing.Constraint.{DependsOnAll, DependsOnDim, In, MinIn, InductionNamed, InductionUnnamed}
+import hocki.klocki.typing.Constraint.{DependsOnAll, DependsOnDim, In, InductionNamed, InductionUnnamed, MinIn, NotIn}
 
 import scala.collection.mutable
 
@@ -63,6 +63,12 @@ class Constraints:
     constraints.collect {
       case in: In
         if in.dimSetVar == dimSetVar => in
+    }
+
+  def findNotInByDimSetVar(dimSetVar: DimSetVar): Set[NotIn] =
+    constraints.collect {
+      case notIn: NotIn
+        if notIn.dimSetVar == dimSetVar => notIn
     }
 
   def findInByDim(dim: Dim): Set[In] =

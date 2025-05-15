@@ -1,0 +1,9 @@
+
+def distinctByRemove = <a, b|>[X|Y]
+    use -a [X | Y] as RemA
+    use -b [X | Y] as RemB
+    link X >-> RemA.X, RemA.Y >-> RemB.X, RemB.Y >-> Y
+
+def main = <a|> [X | Y]
+    use distinctByRemove<a, a|>[X|Y] as S
+    link X >-> S.X, S.Y >-> Y

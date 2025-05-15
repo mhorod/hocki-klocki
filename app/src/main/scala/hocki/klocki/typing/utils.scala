@@ -16,15 +16,7 @@ private def filterRelevantConstraints
   constraints: Set[Constraint],
   iface: SchemaIface
 ): Set[Constraint] =
-  val ifaceDimSetVars = iface.allDimSetVars
-  constraints.filter {
-    case Constraint.InductionNamed(_, from, to) => ifaceDimSetVars.contains(from) && ifaceDimSetVars.contains(to)
-    case Constraint.InductionUnnamed(from, to) => ifaceDimSetVars.contains(from) && ifaceDimSetVars.contains(to)
-    case Constraint.In(_, dsv) => ifaceDimSetVars.contains(dsv)
-    case Constraint.NotIn(_, dsv) => ifaceDimSetVars.contains(dsv)
-    case Constraint.InUnion(_, union) => union subsetOf ifaceDimSetVars
-    case _ => false
-  }
+  constraints.filter(_.dimSetVars subsetOf iface.allDimSetVars)
 
 private def getConstraints[C <: Constraint](schemaConstraints: SchemaConstraints)(using classTag: ClassTag[C]): Set[C] =
   getUntaggedConstraints[C](ungroupFromSchema(schemaConstraints))
@@ -32,7 +24,7 @@ private def getConstraints[C <: Constraint](schemaConstraints: SchemaConstraints
 private def getUntaggedConstraints[C <: Constraint](constraints: Set[SchemaConstraint])(using classTag: ClassTag[C]): Set[C] =
   getConstraints[C](constraints.map(_.constraint))
 
-private def instantiateBound[B <: Binding, E](bindings: List[B], toEntity: String => E): Map[B, E] =
+private def instantiateBound[B <: Binding, E](bindings: Iterable[B], toEntity: String => E): Map[B, E] =
   bindings.map(binding => binding -> toEntity(binding.id.name)).toMap
 
 private def groupBySchema(schemaConstraints: Set[SchemaConstraint]): SchemaConstraints =

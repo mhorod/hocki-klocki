@@ -2,7 +2,7 @@ package hocki.klocki.typing
 
 import hocki.klocki.analysis.ResolvedNames
 import hocki.klocki.ast.Abstra.OnIface
-import hocki.klocki.ast.Statement.{LocalExistentialDim, SchemaDef}
+import hocki.klocki.ast.Statement.SchemaDef
 import hocki.klocki.ast.dim.{DimArgs, DimBinding, DimParams}
 import hocki.klocki.ast.schema.SchemaExpr.Leaf
 import hocki.klocki.ast.schema.{IfaceBinding, SchemaBinding, SchemaExpr}
@@ -40,15 +40,14 @@ def instantiateSchemata(toplevel: Toplevel, nr: ResolvedNames): Map[SchemaBindin
 
   instantiateSchemata(schemaDims, schemaDsvs, definedIfaces)
 
-def createDims(schemaDef: SchemaDef): SchemaDims =
+def createDims(schemaDef: SchemaDef)(using nr: ResolvedNames): SchemaDims =
+  val ifaceExistentials = nr.ifaceExistentials(schemaDef.binding)
+  val localExistentials = nr.allExistentials(schemaDef.binding) diff ifaceExistentials
+
   val universals = instantiateBound(schemaDef.params.universals, Dim(_))
-  val existentials = instantiateBound(schemaDef.params.existentials, Dim(_))
-  val locals = instantiateBound(
-    schemaDef.impl.asInstanceOf[OnIface]
-      .body
-      .collect { case exists: LocalExistentialDim => exists.binding },
-    Dim(_),
-  )
+  val existentials = instantiateBound(ifaceExistentials, Dim(_))
+  val locals = instantiateBound(localExistentials, Dim(_))
+
   SchemaDims(universals, existentials, locals)
 
 def createDimSetVars(schemaDef: SchemaDef): SchemaDimSetVars =
@@ -161,10 +160,10 @@ def constructDefinedIface
   params: DimParams,
   dsvs: SchemaDimSetVars,
   iface: IfaceBinding.Internal,
-): SchemaIface =
+)(using nr: ResolvedNames): SchemaIface =
   SchemaIface(
     params.universals.map(dims.universals),
-    params.existentials.map(dims.existentials),
+    params.existentials.map(nr.dimNames).map(dims.existentials),
     iface.suppliers.map(dsvs.ins),
     iface.consumers.map(dsvs.outs),
   )
@@ -177,8 +176,8 @@ def constructUsedIface
   vertexIface: IfaceBinding.External
 )(using nr: ResolvedNames): SchemaIface =
   SchemaIface(
-    args.universals.map(d => dims.universals(nr.dimNames(d))),
-    args.existentials.map(d => dims.existentials(nr.dimNames(d))),
+    args.universals.map(d => dims.all(nr.dimNames(d))),
+    args.existentials.map(d => dims.all(d)),
     vertexIface.consumers.map(v => dsvs.all(v)),
     vertexIface.suppliers.map(v => dsvs.all(v))
   )
