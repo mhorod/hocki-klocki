@@ -25,3 +25,4 @@ def fromAst(schema: Primitive)(using idGenerator: IdGenerator): Schema =
     case Primitive.Add() => namedBuiltinSchema(name, 1, 0, 1, 1)
     case Primitive.Spawn() => namedBuiltinSchema(name, 0, 1, 1, 1)
     case Primitive.Remove() => namedBuiltinSchema(name, 1, 0, 1, 1)
+    case Primitive.Join() => namedBuiltinSchema(name, 0, 0, 2, 1)

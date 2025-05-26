@@ -1,8 +1,8 @@
 package hocki.klocki.typing
 
 import hocki.klocki.ast.schema.{Primitive, SchemaBinding}
-import hocki.klocki.entities.Dim
-import hocki.klocki.typing.Constraint.{Distinct, In, InUnion, InductionNamed, InductionUnnamed, NotExistential, NotIn}
+import hocki.klocki.entities.{Dim, DimSetVar}
+import hocki.klocki.typing.Constraint.{In, InUnion, InductionNamed, InductionUnnamed, EquivNamed, EquivUnnamed, NotExistential, NotIn}
 import hocki.klocki.visualize.presentTyping
 
 import scala.collection.mutable
@@ -38,6 +38,55 @@ class RulesPhase(ruleList: ConstraintObserver*)(using schemata: Map[SchemaBindin
 
     groupBySchema(inferred.toSet)
 
+
+class PropagateInUnionsUp(ifaceDimSetVars: Set[DimSetVar]) extends Phase:
+  override def apply(constraints: SchemaConstraints): SchemaConstraints =
+    given Set[In] = getConstraints[In](constraints)
+    val decomposer = Decomposer(ifaceDimSetVars, constraints)
+
+    constraints.view.mapValues(
+      _.flatMap {
+        case InUnion(dim, union) =>
+          if isSatisfiedUnion(dim, union) then
+            Set()
+          else
+            Set(dim inUnion decomposer.decomposeNamed(dim, union))
+        case other => Set(other)
+      }
+    ).toMap
+
+
+class PropagateEquivsUp(ifaceDimSetVars: Set[DimSetVar]) extends Phase:
+  override def apply(constraints: SchemaConstraints): SchemaConstraints =
+    val decomposer = Decomposer(ifaceDimSetVars, constraints)
+    constraints.view.mapValues(
+      _.flatMap {
+        case EquivUnnamed(lhs, rhs) =>
+          val ifaceLhs = decomposer.decomposeUnnamed(lhs)
+          val ifaceRhs = decomposer.decomposeUnnamed(rhs)
+          if ifaceLhs != ifaceRhs then Set(ifaceLhs <==> ifaceRhs) else Set()
+        case EquivNamed(dim, lhs, rhs) =>
+          val ifaceLhs = decomposer.decomposeNamed(dim, lhs)
+          val ifaceRhs = decomposer.decomposeNamed(dim, rhs)
+          if ifaceLhs != ifaceRhs then Set(ifaceLhs <=| dim |=> ifaceRhs) else Set()
+        case other => Set(other)
+      }
+    ).toMap
+
+object SatisfyEquivNamed extends Phase:
+  override def apply(constraints: SchemaConstraints): SchemaConstraints =
+    given Set[In] = getConstraints[In](constraints)
+    val equivsNamed = getConstraints[EquivNamed](constraints)
+    constraints.view.mapValues(
+      _.flatMap {
+        case EquivNamed(dim, lhs, rhs) =>
+          val deducedLhs = if isSatisfiedUnion(dim, rhs) then Set(dim inUnion lhs) else Set()
+          val deducedRhs = if isSatisfiedUnion(dim, lhs) then Set(dim inUnion rhs) else Set()
+          deducedLhs ++ deducedRhs
+        case other => Set(other)
+      }
+    ).toMap
+
 object ReduceUnionsPhase extends Phase:
   override def apply(constraints: SchemaConstraints): SchemaConstraints =
     val notIns = getConstraints[NotIn](constraints)
@@ -53,16 +102,6 @@ object ReduceUnionsPhase extends Phase:
       }
     ).toMap
 
-object GuardDistinctPhase extends Phase:
-  override def apply(constraints: SchemaConstraints): SchemaConstraints =
-    constraints.tapEach((schema, cs) =>
-      cs.foreach {
-        case distinct@Distinct(lhs, rhs) if lhs == rhs =>
-          throw IllegalStateException(s"Typing poszedł w chrzan (schrzanił się): $distinct in schema ${schema.id}")
-        case other => ()
-      }
-    )
-
 class GuardExistentialsPhase(schemata: Map[SchemaBinding, Schema]) extends Phase:
   override def apply(constraints: SchemaConstraints): SchemaConstraints =
     constraints.map((schemaBinding, schemaConstraints) =>
@@ -71,7 +110,6 @@ class GuardExistentialsPhase(schemata: Map[SchemaBinding, Schema]) extends Phase
       schemaBinding -> schemaConstraints.flatMap {
         case in: In => guardLeak(in, schema)
         case inUnion: InUnion => guardLeak(inUnion, schema)
-        case distinct: Distinct => ignoreLeak(distinct, schema.allExistentials)
         case notExistential: NotExistential =>
           if schema.allExistentials.contains(notExistential.dim) then
             throw IllegalStateException(s"Typing poszedł w dynię: ${notExistential.dim} cannot be existential")
@@ -98,14 +136,23 @@ def inferTypes(schemata: Map[SchemaBinding, Schema], primitives: Map[Primitive, 
 
   given Map[SchemaBinding, Schema] = schemata
 
+  val ifaceDimSetVars = schemata.values.map(_.iface).toSet.flatMap(_.allDimSetVars)
+
   val phases: List[Phase] = List(
+    // 0. inductions
     RulesPhase(ComposeInductionsNamed, ComposeInductionsUnnamed),
+    // 1. ins down
     RulesPhase(PropagateInsDown),
+    // 2. not ins up
     RulesPhase(PropagateNotInsUp),
-    RulesPhase(PropagateInUnionsUp(schemata.values.map(_.iface).toSet)),
+    // 3. equivs
+    SatisfyEquivNamed,
+    PropagateEquivsUp(ifaceDimSetVars),
+    // 4. in unions
+    PropagateInUnionsUp(ifaceDimSetVars),
     ReduceUnionsPhase,
+    // error postprocessing
     RulesPhase(RequireDistinct),
-    GuardDistinctPhase,
     GuardExistentialsPhase(schemata),
   )
 
@@ -120,11 +167,11 @@ def inferTypes(schemata: Map[SchemaBinding, Schema], primitives: Map[Primitive, 
         .map(c => SchemaConstraint(b, c))
     )
 
-  val reflConstraints = {
+  val reflConstraints =
     val unnamed = schemata.flatMap((b, s) => s.allDimSetVars.map(dsv => dsv ~~> dsv).map(c => SchemaConstraint(b, c)))
     val named = schemata.flatMap((b, s) => s.allDimSetVars.flatMap(dsv => s.allDims.map(dsv ~ _ ~> dsv)).map(c => SchemaConstraint(b, c)))
     unnamed ++ named
-  }
+
 
   val initialConstraints = groupBySchema(primitiveConstraints ++ edgeConstraints ++ reflConstraints)
 
@@ -157,10 +204,15 @@ def observeConstraint
   constraints: Constraints,
   rules: Set[ConstraintObserver]
 ): Set[Constraint] =
+  val renamed = generateRenamedConstraints(schema, constraint)
   if constraint.source == schemaBinding then
     constraints.add(constraint.constraint)
-    rules.flatMap(_.observe(constraint.constraint, constraints))
-  else if schema.renamers.contains(constraint.source) then
+    renamed ++ rules.flatMap(_.observe(constraint.constraint, constraints))
+  else
+    renamed
+
+def generateRenamedConstraints(schema: Schema, constraint: SchemaConstraint): Set[Constraint] =
+  if schema.renamers.contains(constraint.source) then
     schema.renamers(constraint.source).flatMap(_.rename(constraint.constraint))
   else
     Set()

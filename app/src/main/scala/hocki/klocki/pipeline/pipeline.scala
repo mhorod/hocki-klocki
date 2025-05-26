@@ -1,9 +1,9 @@
 package hocki.klocki.pipeline
 
 import hocki.klocki.analysis.resolveNames
-import hocki.klocki.ast.Toplevel
+import hocki.klocki.ast.{Toplevel, addPrelude}
 import hocki.klocki.parsing.DflParser
-import hocki.klocki.typing.{SchemaTy, inferTypes, instantiateSchemata}
+import hocki.klocki.typing.{inferTypes, instantiateSchemata}
 import hocki.klocki.visualize.graph.{buildProgram, programToJson}
 import hocki.klocki.visualize.presentTyping
 
@@ -22,7 +22,7 @@ def runPipeline
       val names =
         try resolveNames(tree)
         catch case e: Exception =>
-          println(s"Name resolution error: ${e}")
+          println(s"Name resolution error: $e")
           e.printStackTrace()
           return false
 
@@ -42,7 +42,7 @@ def runPipeline
               case e: Exception =>
                 println(e.getMessage)
                 e.printStackTrace()
-                writeToFile(s"<typing error> ${e}", filename)
+                writeToFile(s"<typing error> $e", filename)
                 return false
           val typingPresentation = presentTyping(typing)
           writeToFile(typingPresentation, filename)
@@ -56,7 +56,7 @@ private def load(filename: String): Option[Toplevel] =
     try source.mkString
     finally source.close()
   DflParser.parseAll(DflParser.program, withoutComments(code)) match
-    case DflParser.Success(result, _) => Some(result)
+    case DflParser.Success(result, _) => Some(addPrelude(result))
     case DflParser.Failure(msg, input) =>
       println(msg)
       println(input.pos.longString)

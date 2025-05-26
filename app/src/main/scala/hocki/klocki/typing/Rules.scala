@@ -1,6 +1,7 @@
 package hocki.klocki.typing
 
-import hocki.klocki.typing.Constraint.{Distinct, In, InUnion, InductionNamed, InductionUnnamed, NotIn}
+import hocki.klocki.entities.{Dim, DimSetVar}
+import hocki.klocki.typing.Constraint.{In, InUnion, InductionNamed, InductionUnnamed, NotIn, EquivNamed, EquivUnnamed}
 
 object ComposeInductionsNamed extends ConstraintObserver:
   override def observe
@@ -37,35 +38,16 @@ object PropagateInsDown extends ConstraintObserver:
           .map(induction => dim in induction.to)
       case _ => Set()
 
-class PropagateInUnionsUp(ifaces: Set[SchemaIface]) extends ConstraintObserver:
-  private val ifaceDimSetVars = ifaces.flatMap(_.allDimSetVars)
-
-  override def observe(newConstraint: Constraint, constraints: Constraints): Set[Constraint] =
-    newConstraint match
-      case InUnion(dim, union) =>
-        if union.exists(dsv => constraints.contains(dim in dsv)) then
-          Set()
-        else
-          Set(
-            dim inUnion union.flatMap(
-              dsv => constraints.findInductionsNamedByRhs(dim, dsv)
-                .map(_.from)
-                .intersect(ifaceDimSetVars)
-            )
-          )
-      case _ => Set()
-
 object RequireDistinct extends ConstraintObserver:
   override def observe(newConstraint: Constraint, constraints: Constraints): Set[Constraint] =
     newConstraint match
       case notIn@NotIn(dim, dsv) =>
-        constraints.findInByDimSetVar(dsv).flatMap(in => guardRadish(in, notIn))
+        constraints.findInByDimSetVar(dsv).foreach(in => guardRadish(in, notIn))
       case in@In(dim, dsv) =>
-        constraints.findNotInByDimSetVar(dsv).flatMap(notIn => guardRadish(in, notIn))
-      case _ => Set()
+        constraints.findNotInByDimSetVar(dsv).foreach(notIn => guardRadish(in, notIn))
+      case _ => ()
+    Set()
 
-private def guardRadish(in: In, notIn: NotIn): Set[Distinct] =
+private def guardRadish(in: In, notIn: NotIn): Unit =
   if in.dim == notIn.dim && in.dimSetVar == notIn.dimSetVar then
     throw new IllegalStateException(s"Typing poszedł w rzodkiew: $in and $notIn")
-  Set(Distinct(in.dim, notIn.dim), Distinct(notIn.dim, in.dim))
-

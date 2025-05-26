@@ -16,6 +16,12 @@ extension (dimSetVar: DimSetVar)
   infix def ~~>(other: DimSetVar): Constraint.InductionUnnamed = Constraint.InductionUnnamed(dimSetVar, other)
   infix def ~(dim: Dim): PartiallyAppliedInduction = PartiallyAppliedInduction(dimSetVar, dim)
 
-infix case class PartiallyAppliedInduction(dimSetVar: DimSetVar, dim: Dim):
+case class PartiallyAppliedInduction (dimSetVar: DimSetVar, dim: Dim):
   infix def ~>(other: DimSetVar): Constraint.InductionNamed = Constraint.InductionNamed(dim, dimSetVar, other)
 
+extension (dimSetVars: Set[DimSetVar])
+  infix def <==>(other: Set[DimSetVar]): Constraint.EquivUnnamed = Constraint.EquivUnnamed(dimSetVars, other)
+  infix def <=|(dim: Dim): PartiallyAppliedEquivalence = PartiallyAppliedEquivalence(dimSetVars, dim)
+
+case class PartiallyAppliedEquivalence(dimSetVars: Set[DimSetVar], dim: Dim):
+  infix def |=>(other: Set[DimSetVar]): Constraint.EquivNamed = Constraint.EquivNamed(dim, dimSetVars, other)

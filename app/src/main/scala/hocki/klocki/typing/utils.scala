@@ -2,8 +2,9 @@ package hocki.klocki.typing
 
 import hocki.klocki.ast.schema.SchemaBinding
 import hocki.klocki.ast.{Abstra, Binding}
-import hocki.klocki.entities.DimSetVar
+import hocki.klocki.entities.{Dim, DimSetVar}
 import hocki.klocki.typing.Constraint
+import hocki.klocki.typing.Constraint.In
 
 import scala.collection.mutable
 import scala.reflect.ClassTag
@@ -35,3 +36,6 @@ private def ungroupFromSchema(schemaConstraints: SchemaConstraints): Set[SchemaC
 
 private def tagWithSchema(binding: SchemaBinding, constraints: Set[Constraint]): Set[SchemaConstraint] =
   constraints.map(SchemaConstraint(binding, _))
+
+private def isSatisfiedUnion(dim: Dim, parts: Set[DimSetVar])(using ins: Set[In]): Boolean =
+  parts.exists(part => ins.contains(dim in part))

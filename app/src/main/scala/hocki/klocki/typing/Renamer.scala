@@ -1,6 +1,6 @@
 package hocki.klocki.typing
 
-import hocki.klocki.typing.Constraint.{InductionNamed, InductionUnnamed}
+import hocki.klocki.typing.Constraint.{InductionNamed, InductionUnnamed, EquivUnnamed, EquivNamed}
 
 class Renamer(schemaIface: SchemaIface, useIface: SchemaIface, dims: SchemaDims):
   if schemaIface.ins.size != useIface.ins.size then
@@ -21,13 +21,17 @@ class Renamer(schemaIface: SchemaIface, useIface: SchemaIface, dims: SchemaDims)
   def rename(constraint: Constraint): Set[Constraint] =
     if !constraint.conforms(schemaIface.allDims, schemaIface.allDimSetVars) then
       Set.empty
-    else constraint match
-      case unnamed: Constraint.InductionUnnamed =>
-        dims.all.values.toSet.diff(useIface.allDims)
-          .map(dim => InductionNamed(dim, unnamed.from, unnamed.to))
+    else { 
+      val dimDiff = dims.all.values.toSet.diff(useIface.allDims)
+      constraint match
+      case InductionUnnamed(from, to) =>
+        (dimDiff.map(dim => InductionNamed(dim, from, to)) + InductionUnnamed(from, to))
+        .map(_.mapDimSetVars(dimSetVarMapping))
+      case EquivUnnamed(lhs, rhs) =>
+        (dimDiff.map(dim => EquivNamed(dim, lhs, rhs)) + EquivUnnamed(lhs, rhs))
           .map(_.mapDimSetVars(dimSetVarMapping))
-          + InductionUnnamed(unnamed.from, unnamed.to).mapDimSetVars(dimSetVarMapping)
       case _ => Set(constraint.mapDims(dimMapping).mapDimSetVars(dimSetVarMapping))
+    }
 
   def rename(constraints: Iterable[Constraint]): Iterable[Constraint] =
     constraints.flatMap(rename)

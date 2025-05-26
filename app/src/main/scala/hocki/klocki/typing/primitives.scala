@@ -1,8 +1,6 @@
 package hocki.klocki.typing
 
 import hocki.klocki.Config
-import hocki.klocki.analysis.ResolvedNames
-import hocki.klocki.ast.dim.DimBinding
 import hocki.klocki.ast.schema.Primitive
 import hocki.klocki.entities.{Dim, DimSetVar}
 import hocki.klocki.typing.Constraint.NotExistential
@@ -12,6 +10,7 @@ def getTypeOfPrimitive(primitive: Primitive): SchemaTy = primitive match
   case Primitive.Add() => tyOfAdd
   case Primitive.Spawn() => tyOfSpawn
   case Primitive.Remove() => tyOfRemove
+  case Primitive.Join() => tyOfJoin
 
 private val tysOfUnions: Vector[SchemaTy] = Vector.from((0 until Config.MaxUnionWidth).map(generateTyOfUnion))  
 
@@ -28,6 +27,18 @@ private val tyOfRemove: SchemaTy =
     x ~~> y,
   )
   val iface = SchemaIface(List(dim), List(), List(x), List(y))
+  SchemaTy(iface, constraints)
+
+private val tyOfJoin: SchemaTy =
+  val x0 = DimSetVar("X0")
+  val x1 = DimSetVar("X1")
+  val y = DimSetVar("Y")
+  val constraints = Set(
+    Set(x0) <==> Set(x1),
+    x0 ~~> y,
+    x1 ~~> y,
+  )
+  val iface = SchemaIface(List(), List(), List(x0, x1), List(y))
   SchemaTy(iface, constraints)
 
 private def generateTyOfExtendWithDim(isUniversalDim: Boolean): SchemaTy =

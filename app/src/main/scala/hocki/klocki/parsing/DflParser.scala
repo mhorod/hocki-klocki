@@ -4,8 +4,7 @@ import hocki.klocki.ast.schema.SchemaRef.Builtin
 import hocki.klocki.ast.dim.{DimArgs, DimBinding, DimId, DimParams, DimRef}
 import hocki.klocki.ast.schema.{Primitive, IfaceBinding, SchemaBinding, SchemaExpr, SchemaId, SchemaRef}
 import hocki.klocki.ast.vertex.{BlockId, VertexBinding, VertexId, VertexRef}
-import hocki.klocki.ast.{Abstra, ConnectionDecl, Link, Statement, Toplevel, ToplevelStatement, VertexUse}
-import hocki.klocki.entities.Dim
+import hocki.klocki.ast.{Abstra, ConnectionDecl, Link, Statement, Toplevel, VertexUse}
 
 import scala.util.parsing.combinator.RegexParsers
 
@@ -57,7 +56,7 @@ object DflParser extends RegexParsers:
 
   private def schemaExprLeaf: Parser[SchemaExpr.Leaf] = primitiveSchemaRef | namedSchemaRef
 
-  private def namedSchemaRef: Parser[SchemaExpr.Leaf] = schemaId ~ opt(dimArgs) ^^ {
+  private def namedSchemaRef: Parser[SchemaExpr.Leaf] = referrableSchemaId ~ opt(dimArgs) ^^ {
     case schemaId ~ dimArgs => SchemaExpr.Leaf(SchemaRef.Named(schemaId), dimArgs.getOrElse(DimArgs.empty))
   }
 
@@ -72,7 +71,7 @@ object DflParser extends RegexParsers:
   // Builtin
 
   private def builtinSchema: Parser[(Primitive, DimArgs)] =
-    builtinUnion | builtinAddNamed | builtinAddExistential | builtinRemove
+    builtinUnion | builtinAddNamed | builtinAddExistential | builtinRemove | builtinJoin
 
   private def builtinUnion: Parser[(Primitive.Union, DimArgs)] = "U" ~> braced(naturalNumber) ^^ {
     arity => (Primitive.Union(arity), DimArgs.empty)
@@ -88,6 +87,10 @@ object DflParser extends RegexParsers:
 
   private def builtinRemove: Parser[(Primitive.Remove, DimArgs)] = "-" ~> dimRef ^^ {
     ref => (Primitive.Remove(), DimArgs(List(ref), List()))
+  }
+
+  private def builtinJoin: Parser[(Primitive.Join, DimArgs)] = "><" ^^ {
+    _ => (Primitive.Join(), DimArgs(List(), List()))
   }
   
   private def dimArgs: Parser[DimArgs] = angleBracketed(dimRefList ~ ("|" ~> dimBindingList)) ^^ {
@@ -149,6 +152,8 @@ object DflParser extends RegexParsers:
     """[a-z_][a-zA-Z0-9_]*""".r ^^ {
       SchemaId(_)
     }
+
+  private def referrableSchemaId: Parser[SchemaId] = schemaId | ("<>" ^^ { SchemaId(_) })
 
   private def vertexId: Parser[VertexId] =
     """[A-Z][a-zA-Z0-9_]*""".r ^^ {

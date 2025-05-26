@@ -8,11 +8,13 @@ enum Primitive:
   case Add()
   case Spawn()
   case Remove()
+  case Join()
 
   override def toString: String =
     val builtinRepr = this match
       case Primitive.Union(arity) => s"U{$arity}"
-      case Primitive.Add() => s"+"
-      case Primitive.Spawn() => s"*"
-      case Primitive.Remove() => s"-"
+      case Primitive.Add() => "+"
+      case Primitive.Spawn() => "*"
+      case Primitive.Remove() => "-"
+      case Primitive.Join() => "><"
     s"builtin $builtinRepr"

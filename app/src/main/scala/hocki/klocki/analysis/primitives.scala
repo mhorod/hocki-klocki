@@ -8,6 +8,7 @@ def getBindingOfPrimitive(primitive: Primitive): SchemaBinding = primitive match
   case Primitive.Add() => addPrimitiveBinding
   case Primitive.Spawn() => spawnPrimitiveBinding
   case Primitive.Remove() => removePrimitiveBinding
+  case Primitive.Join() => joinPrimitiveBinding
 
 private val unionPrimitiveBindings: Vector[SchemaBinding] = Vector.from(
   (0 until Config.MaxUnionWidth).map(n => SchemaBinding(SchemaId(s"U{$n}")))
@@ -15,3 +16,4 @@ private val unionPrimitiveBindings: Vector[SchemaBinding] = Vector.from(
 private val addPrimitiveBinding: SchemaBinding = SchemaBinding(SchemaId("+"))
 private val spawnPrimitiveBinding: SchemaBinding = SchemaBinding(SchemaId("*"))
 private val removePrimitiveBinding: SchemaBinding = SchemaBinding(SchemaId("-"))
+private val joinPrimitiveBinding: SchemaBinding = SchemaBinding(SchemaId("><"))

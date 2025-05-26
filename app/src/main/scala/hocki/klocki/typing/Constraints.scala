@@ -1,7 +1,7 @@
 package hocki.klocki.typing
 
 import hocki.klocki.entities.{Dim, DimSetVar}
-import hocki.klocki.typing.Constraint.{DependsOnAll, DependsOnDim, In, InductionNamed, InductionUnnamed, MinIn, NotIn}
+import hocki.klocki.typing.Constraint.{DependsOnAll, DependsOnDim, In, EquivNamed, EquivUnnamed, InductionNamed, InductionUnnamed, MinIn, NotIn}
 
 import scala.collection.mutable
 
@@ -40,13 +40,23 @@ class Constraints:
         if induction.from == dimSetVar => induction
     }
 
-
   def findInductionsUnnamedByRhs(dimSetVar: DimSetVar): Set[InductionUnnamed] =
     constraints.collect {
       case induction: InductionUnnamed
         if induction.to == dimSetVar => induction
     }
+  
+  def getEquivNamedByDim(dim: Dim): Set[EquivNamed] =
+    constraints.collect {
+      case equivNamed : EquivNamed
+        if equivNamed.dim == dim => equivNamed
+    }
 
+  def allEquivUnnamed: Set[EquivUnnamed] =
+    constraints.collect {
+      case equivUnnamed: EquivUnnamed => equivUnnamed
+    }
+    
   def findDependsOnAllByDimSetVar(dimSetVar: DimSetVar): Set[DependsOnAll] =
     constraints.collect {
       case dependsOnAll: DependsOnAll
