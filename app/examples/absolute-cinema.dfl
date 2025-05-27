@@ -1,0 +1,35 @@
+def f = <a, b | c> [X1, X2, X3, X4 | Y]
+    use >< [X1, X2 | Y] as Join1
+    use >< [X1, X2 | Y] as Join2
+    use >< [X1, X2 | Y] as Join3
+    use -b [X | Y] as RemoveB
+    use +a [X | Y] as AddA
+    use *c [X | Y] as SpawnC
+    use U{2} [X1, X2 | Y] as Union
+    link
+    X1 >-> Join1.X1,
+    X2 >-> Join1.X2,
+    X3 >-> RemoveB.X,
+    RemoveB.Y >-> Join2.X1,
+    X4 >-> Join2.X2,
+    Join2.Y >-> Join3.X2,
+    Join1.Y >-> Union.X1,
+    X2 >-> SpawnC.X,
+    SpawnC.Y >-> Union.X2,
+    Union.Y >-> Join3.X1,
+    Join3.Y >-> AddA.X,
+    AddA.Y >-> Y
+
+def absolutne_kino = <a, b | c> [|]
+    use f <a, b | c> [X1, X2, X3, X4 | Y] as F
+    use -a [X | Y] as RemoveA
+    use +b [X | Y] as AddB
+    use -c [X | Y] as RemoveC
+    link
+        F.Y >-> RemoveA.X,
+        RemoveA.Y >-> F.X1,
+        RemoveA.Y >-> F.X4,
+        RemoveA.Y >-> AddB.X,
+        AddB.Y >-> F.X3,
+        RemoveA.Y >-> RemoveC.X,
+        RemoveC.Y >-> F.X2

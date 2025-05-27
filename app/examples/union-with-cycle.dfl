@@ -1,0 +1,9 @@
+def f = <a |> [X1, X2 | Y]
+    use U{2} [X1, X2 | Y] as Union
+    use -a [X | Y] as RemoveA
+    link X1 >-> Union.X1, X2 >-> Union.X2, Union.Y >-> RemoveA.X, RemoveA.Y >-> Y
+
+def cinema = <a |> [|]
+    use +a [X | Y] as AddA
+    use f <a |> [X1, X2 | Y] as F
+    link AddA.Y >-> F.X1, AddA.Y >-> F.X2, F.Y >-> AddA.X

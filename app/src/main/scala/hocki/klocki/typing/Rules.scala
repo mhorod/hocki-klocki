@@ -61,7 +61,10 @@ class PropagateInUnionsUp(decomposer: Decomposer) extends ConstraintObserver:
   override def observe(newConstraint: Constraint, constraints: Constraints): Set[Constraint] =
     newConstraint match
       case InUnion(dim, union) =>
-        Set(dim inUnion decomposer.decomposeNamed(dim, union))
+        if isSatisfiedUnion(dim, union)(using constraints.findInByDim(dim)) then
+          Set()
+        else
+          Set(dim inUnion decomposer.decomposeNamed(dim, union))
       case other => Set(other)
 
 object RequireDistinct extends ConstraintObserver:

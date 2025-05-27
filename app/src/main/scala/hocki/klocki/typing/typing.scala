@@ -3,7 +3,7 @@ package hocki.klocki.typing
 import hocki.klocki.ast.schema.{Primitive, SchemaBinding}
 import hocki.klocki.entities.{Dim, DimSetVar}
 import hocki.klocki.typing.Constraint.{EquivNamed, In, InUnion, InductionNamed, InductionUnnamed, NotExistential, NotIn}
-import hocki.klocki.visualize.{presentConstraints, presentTyping}
+import hocki.klocki.visualize.{presentConstraints, presentTyping, printConstraints}
 
 import scala.collection.mutable
 
@@ -59,16 +59,6 @@ object SatisfyEquivNamed extends Phase:
       }
     ).toMap
 
-
-object PruneSatisfiedUnionsPhase extends Phase:
-  override def apply(constraints: SchemaConstraints): SchemaConstraints =
-    given Set[In] = getConstraints[In](constraints)
-    constraints.view.mapValues(
-      _.filter {
-        case InUnion(dim, union) => !isSatisfiedUnion(dim, union)
-        case _ => true
-      }
-    ).toMap
 
 object ReduceUnionsPhase extends Phase:
   override def apply(constraints: SchemaConstraints): SchemaConstraints =
@@ -133,7 +123,6 @@ def inferTypes(schemata: Map[SchemaBinding, Schema], primitives: Map[Primitive, 
     SatisfyEquivNamed,
     DecomposingPhase(decomposer => RulesPhase(PropagateEquivsUp(decomposer))),
     // 4. in unions
-    PruneSatisfiedUnionsPhase,
     DecomposingPhase(decomposer => RulesPhase(PropagateInUnionsUp(decomposer))),
     ReduceUnionsPhase,
     // error postprocessing
@@ -178,7 +167,12 @@ def inferInPhases
 (
   phases: List[Phase],
   initialConstraints: SchemaConstraints
-): SchemaConstraints = phases.foldLeft(initialConstraints)((constraints, phase) => phase(constraints))
+): SchemaConstraints =
+  phases.foldLeft(initialConstraints)((constraints, phase) =>
+    println(s"\n\nPhase ${phase.getClass.getSimpleName} start")
+    presentSchemaConstraints(constraints)
+    phase(constraints)
+  )
 
 
 

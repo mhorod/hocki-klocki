@@ -23,21 +23,25 @@ class Renamer(schemaIface: SchemaIface, useIface: SchemaIface, dims: SchemaDims)
   private val alreadyRenamed = mutable.Set[Constraint]()
 
   def rename(constraint: Constraint): Set[Constraint] =
-    if !constraint.conforms(schemaIface.allDims, schemaIface.allDimSetVars) then
-      Set.empty
-    else if alreadyRenamed.contains(constraint) then
-      Set.empty
-    else
-      alreadyRenamed.add(constraint)
-      val dimDiff = dims.all.values.toSet.diff(useIface.allDims)
-      constraint match
-      case InductionUnnamed(from, to) =>
-        (dimDiff.map(dim => InductionNamed(dim, from, to)) + InductionUnnamed(from, to))
-        .map(_.mapDimSetVars(dimSetVarMapping))
-      case EquivUnnamed(lhs, rhs) =>
-        (dimDiff.map(dim => EquivNamed(dim, lhs, rhs)) + EquivUnnamed(lhs, rhs))
+    val renamed =
+      if !constraint.conforms(schemaIface.allDims, schemaIface.allDimSetVars) then
+        Set.empty
+      else if alreadyRenamed.contains(constraint) then
+        Set.empty
+      else
+        alreadyRenamed.add(constraint)
+        val dimDiff = dims.all.values.toSet.diff(useIface.allDims)
+        constraint match
+        case InductionUnnamed(from, to) =>
+          (dimDiff.map(dim => InductionNamed(dim, from, to)) + InductionUnnamed(from, to))
           .map(_.mapDimSetVars(dimSetVarMapping))
-      case _ => Set(constraint.mapDims(dimMapping).mapDimSetVars(dimSetVarMapping))
+        case EquivUnnamed(lhs, rhs) =>
+          (dimDiff.map(dim => EquivNamed(dim, lhs, rhs)) + EquivUnnamed(lhs, rhs))
+            .map(_.mapDimSetVars(dimSetVarMapping))
+        case _ => Set(constraint.mapDims(dimMapping).mapDimSetVars(dimSetVarMapping))
+    if renamed.nonEmpty then
+      println(s"Renaming $constraint --> ${renamed.mkString(", ")}")
+    renamed
 
   def rename(constraints: Iterable[Constraint]): Iterable[Constraint] =
     constraints.flatMap(rename)
