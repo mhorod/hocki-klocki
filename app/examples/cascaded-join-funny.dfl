@@ -1,0 +1,23 @@
+def f = <a, b | c> [X1, X2, X3, X4 | Y]
+    use >< [X1, X2 | Y] as Join1
+    use >< [X1, X2 | Y] as Join2
+    use >< [X1, X2 | Y] as Join3
+    use -b [X | Y] as RemoveBAbove
+    use -b [X | Y] as RemoveBBelow
+    use -a [X | Y] as RemoveA
+    use *c [X | Y] as SpawnC
+    use U{2} [X1, X2 | Y] as Union
+    link
+    X1 >-> Join1.X1,
+    X2 >-> Join1.X2,
+    X3 >-> RemoveBAbove.X,
+    RemoveBAbove.Y >-> Join2.X1,
+    X4 >-> Join2.X2,
+    Join2.Y >-> RemoveBBelow.X,
+    RemoveBBelow.Y >-> Join3.X2,
+    Join1.Y >-> Union.X1,
+    X2 >-> SpawnC.X,
+    SpawnC.Y >-> Union.X2,
+    Union.Y >-> Join3.X1,
+    Join3.Y >-> RemoveA.X,
+    RemoveA.Y >-> Y

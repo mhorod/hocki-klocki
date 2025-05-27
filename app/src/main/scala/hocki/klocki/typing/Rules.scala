@@ -37,6 +37,32 @@ object PropagateInsDown extends ConstraintObserver:
         constraints.findInductionsNamedByLhs(dim, dimSetVar)
           .map(induction => dim in induction.to)
       case _ => Set()
+      
+class PropagateEquivsUp(decomposer: Decomposer) extends ConstraintObserver:
+  override def observe(newConstraint: Constraint, constraints: Constraints): Set[Constraint] =
+    newConstraint match
+      case EquivUnnamed(lhs, rhs) =>
+        val decomposedLhs = decomposer.decomposeUnnamed(lhs)
+        val decomposedRhs = decomposer.decomposeUnnamed(rhs)
+        if decomposedLhs != decomposedRhs then
+          Set(decomposedLhs <==> decomposedRhs)
+        else
+          Set()
+      case EquivNamed(dim, lhs, rhs) =>
+        val decomposedLhs = decomposer.decomposeNamed(dim, lhs)
+        val decomposedRhs = decomposer.decomposeNamed(dim, rhs)
+        if decomposedLhs != decomposedRhs then
+          Set(decomposedLhs <=| dim |=> decomposedRhs)
+        else
+          Set()
+      case _ => Set()
+
+class PropagateInUnionsUp(decomposer: Decomposer) extends ConstraintObserver:
+  override def observe(newConstraint: Constraint, constraints: Constraints): Set[Constraint] =
+    newConstraint match
+      case InUnion(dim, union) =>
+        Set(dim inUnion decomposer.decomposeNamed(dim, union))
+      case other => Set(other)
 
 object RequireDistinct extends ConstraintObserver:
   override def observe(newConstraint: Constraint, constraints: Constraints): Set[Constraint] =

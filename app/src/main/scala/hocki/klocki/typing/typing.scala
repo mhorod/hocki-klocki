@@ -2,8 +2,8 @@ package hocki.klocki.typing
 
 import hocki.klocki.ast.schema.{Primitive, SchemaBinding}
 import hocki.klocki.entities.{Dim, DimSetVar}
-import hocki.klocki.typing.Constraint.{In, InUnion, InductionNamed, InductionUnnamed, EquivNamed, EquivUnnamed, NotExistential, NotIn}
-import hocki.klocki.visualize.presentTyping
+import hocki.klocki.typing.Constraint.{EquivNamed, In, InUnion, InductionNamed, InductionUnnamed, NotExistential, NotIn}
+import hocki.klocki.visualize.{presentConstraints, presentTyping}
 
 import scala.collection.mutable
 
@@ -39,39 +39,10 @@ class RulesPhase(ruleList: ConstraintObserver*)(using schemata: Map[SchemaBindin
     groupBySchema(inferred.toSet)
 
 
-class PropagateInUnionsUp(ifaceDimSetVars: Set[DimSetVar]) extends Phase:
-  override def apply(constraints: SchemaConstraints): SchemaConstraints =
-    given Set[In] = getConstraints[In](constraints)
-    val decomposer = Decomposer(ifaceDimSetVars, constraints)
-
-    constraints.view.mapValues(
-      _.flatMap {
-        case InUnion(dim, union) =>
-          if isSatisfiedUnion(dim, union) then
-            Set()
-          else
-            Set(dim inUnion decomposer.decomposeNamed(dim, union))
-        case other => Set(other)
-      }
-    ).toMap
-
-
-class PropagateEquivsUp(ifaceDimSetVars: Set[DimSetVar]) extends Phase:
+class DecomposingPhase(ruleConstructor: Decomposer => Phase)(using ifaceDimSetVars: Set[DimSetVar]) extends Phase:
   override def apply(constraints: SchemaConstraints): SchemaConstraints =
     val decomposer = Decomposer(ifaceDimSetVars, constraints)
-    constraints.view.mapValues(
-      _.flatMap {
-        case EquivUnnamed(lhs, rhs) =>
-          val ifaceLhs = decomposer.decomposeUnnamed(lhs)
-          val ifaceRhs = decomposer.decomposeUnnamed(rhs)
-          if ifaceLhs != ifaceRhs then Set(ifaceLhs <==> ifaceRhs) else Set()
-        case EquivNamed(dim, lhs, rhs) =>
-          val ifaceLhs = decomposer.decomposeNamed(dim, lhs)
-          val ifaceRhs = decomposer.decomposeNamed(dim, rhs)
-          if ifaceLhs != ifaceRhs then Set(ifaceLhs <=| dim |=> ifaceRhs) else Set()
-        case other => Set(other)
-      }
-    ).toMap
+    ruleConstructor(decomposer)(constraints)
 
 object SatisfyEquivNamed extends Phase:
   override def apply(constraints: SchemaConstraints): SchemaConstraints =
@@ -79,11 +50,23 @@ object SatisfyEquivNamed extends Phase:
     val equivsNamed = getConstraints[EquivNamed](constraints)
     constraints.view.mapValues(
       _.flatMap {
-        case EquivNamed(dim, lhs, rhs) =>
+        case e@EquivNamed(dim, lhs, rhs) =>
           val deducedLhs = if isSatisfiedUnion(dim, rhs) then Set(dim inUnion lhs) else Set()
           val deducedRhs = if isSatisfiedUnion(dim, lhs) then Set(dim inUnion rhs) else Set()
-          deducedLhs ++ deducedRhs
+          val deduced = deducedLhs ++ deducedRhs
+          if deduced.isEmpty then Set(e) else deduced
         case other => Set(other)
+      }
+    ).toMap
+
+
+object PruneSatisfiedUnionsPhase extends Phase:
+  override def apply(constraints: SchemaConstraints): SchemaConstraints =
+    given Set[In] = getConstraints[In](constraints)
+    constraints.view.mapValues(
+      _.filter {
+        case InUnion(dim, union) => !isSatisfiedUnion(dim, union)
+        case _ => true
       }
     ).toMap
 
@@ -137,6 +120,7 @@ def inferTypes(schemata: Map[SchemaBinding, Schema], primitives: Map[Primitive, 
   given Map[SchemaBinding, Schema] = schemata
 
   val ifaceDimSetVars = schemata.values.map(_.iface).toSet.flatMap(_.allDimSetVars)
+  given Set[DimSetVar] = ifaceDimSetVars
 
   val phases: List[Phase] = List(
     // 0. inductions
@@ -147,9 +131,10 @@ def inferTypes(schemata: Map[SchemaBinding, Schema], primitives: Map[Primitive, 
     RulesPhase(PropagateNotInsUp),
     // 3. equivs
     SatisfyEquivNamed,
-    PropagateEquivsUp(ifaceDimSetVars),
+    DecomposingPhase(decomposer => RulesPhase(PropagateEquivsUp(decomposer))),
     // 4. in unions
-    PropagateInUnionsUp(ifaceDimSetVars),
+    PruneSatisfiedUnionsPhase,
+    DecomposingPhase(decomposer => RulesPhase(PropagateInUnionsUp(decomposer))),
     ReduceUnionsPhase,
     // error postprocessing
     RulesPhase(RequireDistinct),
@@ -193,8 +178,15 @@ def inferInPhases
 (
   phases: List[Phase],
   initialConstraints: SchemaConstraints
-): SchemaConstraints =
-  phases.foldLeft(initialConstraints)((constraints, phase) => phase(constraints))
+): SchemaConstraints = phases.foldLeft(initialConstraints)((constraints, phase) => phase(constraints))
+
+
+
+def presentSchemaConstraints(constraints: SchemaConstraints): Unit =
+  constraints.foreach((b, c) =>
+    println(s"Constraints for schema $b:")
+    println(presentConstraints(c))
+  )
 
 def observeConstraint
 (

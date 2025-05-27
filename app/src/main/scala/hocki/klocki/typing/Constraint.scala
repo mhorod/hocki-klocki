@@ -6,13 +6,13 @@ enum Constraint:
   case NotExistential(dim: Dim)
   case NotIn(dim: Dim, dimSetVar: DimSetVar)
   case InUnion(dim: Dim, union: Set[DimSetVar])
+  case EquivNamed(dim: Dim, lhs: Set[DimSetVar], rhs: Set[DimSetVar])
+  case EquivUnnamed(lhs: Set[DimSetVar], rhs: Set[DimSetVar])
   case DependsOnAll(dim: Dim, filteredDimSetVar: FilteredDimSetVar)
   case DependsOnDim(depender: Dim, dependency: Dim)
   case MinIn(dim: Dim, filteredDimSetVar: FilteredDimSetVar)
   case InductionNamed(dim: Dim, from: DimSetVar, to: DimSetVar)
   case InductionUnnamed(from: DimSetVar, to: DimSetVar)
-  case EquivNamed(dim: Dim, lhs: Set[DimSetVar], rhs: Set[DimSetVar])
-  case EquivUnnamed(lhs: Set[DimSetVar], rhs: Set[DimSetVar])
   case In(dim: Dim, dimSetVar: DimSetVar)
 
   override def toString: String = this match
@@ -83,6 +83,8 @@ enum Constraint:
     case inductionNamed: InductionNamed => Set(inductionNamed.dim)
     case _: InductionUnnamed => Set()
     case NotExistential(dim) => Set(dim)
+    case EquivNamed(dim, _, _) => Set(dim)
+    case _ : EquivUnnamed => Set()
     case _ => throw IllegalStateException("We don't want such constraints for now")
 
   def dimSetVars: Set[DimSetVar] = this match
@@ -92,4 +94,6 @@ enum Constraint:
     case inductionNamed: InductionNamed => Set(inductionNamed.from, inductionNamed.to)
     case inductionUnnamed: InductionUnnamed => Set(inductionUnnamed.from, inductionUnnamed.to)
     case _: NotExistential => Set()
+    case EquivNamed(_, lhs, rhs) => lhs ++ rhs
+    case EquivUnnamed(lhs, rhs) => lhs ++ rhs
     case _ => throw IllegalStateException("We don't want such constraints for now")

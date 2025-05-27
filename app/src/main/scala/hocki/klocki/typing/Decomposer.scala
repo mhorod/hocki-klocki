@@ -14,11 +14,13 @@ private class Decomposer
     inductionsNamed
       .filter(ind => ifaceDimSetVars.contains(ind.from))
       .groupMap(ind => (ind.to, ind.dim))(_.from)
+      .withDefaultValue(Set())
 
   private val inducersUnnamed =
     inductionsUnnamed
       .filter(ind => ifaceDimSetVars.contains(ind.from))
       .groupMap(_.to)(_.from)
+      .withDefaultValue(Set())
 
   def decomposeNamed(dim: Dim, dsv: DimSetVar): Set[DimSetVar] =
     inducersNamed((dsv, dim))

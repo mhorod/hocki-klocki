@@ -1,0 +1,8 @@
+def f = <a|> [X1, X2 |Y]
+  use >< [X1, X2 | Y] as Join
+  use -a [X | Y] as RemA
+  link
+   X1 >-> RemA.X,
+   RemA.Y >-> Join.X1,
+   X2 >-> Join.X2,
+   Join.Y >-> Y

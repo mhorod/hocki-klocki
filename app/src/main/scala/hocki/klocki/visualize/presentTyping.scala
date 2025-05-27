@@ -10,7 +10,7 @@ def presentTyping(typing: Map[SchemaBinding, SchemaTy]): String =
     val ins = ty.iface.ins.mkString(", ")
     val outs = ty.iface.outs.mkString(", ")
     val constraints = presentConstraints(ty.constraints)
-    s"${schema.id}<$universals | $existentials> : [$ins | $outs]\n$constraints"
+    s"${schema.id} : <$universals | $existentials> [$ins | $outs]\n$constraints"
   ).mkString("\n\n")
 
 def presentConstraints(constraints: Set[? <: Constraint]): String =

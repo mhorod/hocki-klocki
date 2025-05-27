@@ -1,0 +1,18 @@
+def f = <a|> [X1, X2 |Y]
+  use >< [X1, X2 | Y] as Join
+  use -a [X | Y] as AddA
+  link
+   X1 >-> AddA.X,
+   AddA.Y >-> Join.X1,
+   X2 >-> Join.X2,
+   Join.Y >-> Y
+
+def g = <a, b|> [|Y]
+  use f<a|> [X1, X2 | Y] as F
+  use U{0} [|Y] as U1
+  use +a [X | Y] as AddA
+  link
+   U1.Y >-> AddA.X,
+   AddA.Y >-> F.X1,
+   AddA.Y >-> F.X2,
+   F.Y >-> Y
