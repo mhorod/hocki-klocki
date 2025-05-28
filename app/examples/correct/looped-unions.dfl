@@ -1,0 +1,37 @@
+def union_then_remove = <a |> [X1, X2 | Y]
+    use U{2} [X1, X2 | Y] as Union
+    use -a [X | Y] as RemA
+    link
+        X1 >-> Union.X1
+        X2 >-> Union.X2
+        Union.Y >-> RemA.X
+        RemA.Y >-> Y
+
+def union_then_spawn = <| a> [X1, X2 | Y]
+    use U{2} [X1, X2 | Y] as Union
+    use *a [X | Y] as SpawnA
+    link
+        X1 >-> Union.X1
+        X2 >-> Union.X2
+        Union.Y >-> SpawnA.X
+        SpawnA.Y >-> Y
+
+def loops = <a |> [|]
+    # first loop
+    use +a [X | Y] as AddA
+    use union_then_remove <a |> [X1, X2 | Y] as UR
+
+    # second loop
+    use -b [X | Y] as RemB
+    use union_then_spawn <| b> [X1, X2 | Y] as US
+
+    link
+        # first loop
+        AddA.Y >-> UR.X1
+        AddA.Y >-> UR.X2
+        UR.Y >-> AddA.X
+
+        # second loop
+        RemB.Y >-> US.X1
+        RemB.Y >-> US.X2
+        US.Y >-> RemB.X

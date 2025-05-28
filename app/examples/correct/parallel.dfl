@@ -1,0 +1,13 @@
+def parallel = <a, b |> [X0, X1 | Y]
+    use U{2} [X0, X1 | Y] as FirstUnion
+    use -a [X | Y] as RemA
+    use -b [X | Y] as RemB
+    use U{2} [NoA, NoB | Final]
+    link
+        X0 >-> FirstUnion.X0
+        X1 >-> FirstUnion.X1
+        X1 >-> RemB.X
+        FirstUnion.Y >-> RemA.X
+        RemA.Y >-> NoA
+        RemB.Y >-> NoB
+        Final >-> Y

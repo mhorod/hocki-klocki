@@ -11,6 +11,7 @@ private case class SchemaConstraint(source: SchemaBinding, constraint: Constrain
 
 type SchemaConstraints = Map[SchemaBinding, Set[Constraint]]
 type Phase = SchemaConstraints => SchemaConstraints
+type Typing = Map[SchemaBinding, SchemaTy]
 
 class RulesPhase(ruleList: ConstraintObserver*)(using schemata: Map[SchemaBinding, Schema]) extends Phase:
   private val rules = ruleList.toSet
@@ -43,21 +44,6 @@ class DecomposingPhase(ruleConstructor: Decomposer => Phase)(using ifaceDimSetVa
   override def apply(constraints: SchemaConstraints): SchemaConstraints =
     val decomposer = Decomposer(ifaceDimSetVars, constraints)
     ruleConstructor(decomposer)(constraints)
-
-object SatisfyEquivNamed extends Phase:
-  override def apply(constraints: SchemaConstraints): SchemaConstraints =
-    given Set[In] = getConstraints[In](constraints)
-    val equivsNamed = getConstraints[EquivNamed](constraints)
-    constraints.view.mapValues(
-      _.flatMap {
-        case e@EquivNamed(dim, lhs, rhs) =>
-          val deducedLhs = if isSatisfiedUnion(dim, rhs) then Set(dim inUnion lhs) else Set()
-          val deducedRhs = if isSatisfiedUnion(dim, lhs) then Set(dim inUnion rhs) else Set()
-          val deduced = deducedLhs ++ deducedRhs
-          if deduced.isEmpty then Set(e) else deduced
-        case other => Set(other)
-      }
-    ).toMap
 
 
 object ReduceUnionsPhase extends Phase:
@@ -105,7 +91,7 @@ private def ignoreLeak(constraint: Constraint, locals: Set[Dim]): Set[Constraint
   else
     Set(constraint)
 
-def inferTypes(schemata: Map[SchemaBinding, Schema], primitives: Map[Primitive, SchemaBinding]): Map[SchemaBinding, SchemaTy] =
+def inferTypes(schemata: Map[SchemaBinding, Schema], primitives: Map[Primitive, SchemaBinding]): Typing =
 
   given Map[SchemaBinding, Schema] = schemata
 
@@ -120,7 +106,6 @@ def inferTypes(schemata: Map[SchemaBinding, Schema], primitives: Map[Primitive, 
     // 2. not ins up
     RulesPhase(PropagateNotInsUp),
     // 3. equivs
-    SatisfyEquivNamed,
     DecomposingPhase(decomposer => RulesPhase(PropagateEquivsUp(decomposer))),
     // 4. in unions
     DecomposingPhase(decomposer => RulesPhase(PropagateInUnionsUp(decomposer))),
@@ -168,11 +153,7 @@ def inferInPhases
   phases: List[Phase],
   initialConstraints: SchemaConstraints
 ): SchemaConstraints =
-  phases.foldLeft(initialConstraints)((constraints, phase) =>
-    println(s"\n\nPhase ${phase.getClass.getSimpleName} start")
-    presentSchemaConstraints(constraints)
-    phase(constraints)
-  )
+  phases.foldLeft(initialConstraints)((constraints, phase) => phase(constraints))
 
 
 

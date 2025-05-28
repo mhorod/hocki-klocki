@@ -1,0 +1,9 @@
+def main = <| b> [X | Y]
+    use *a [X | Y] as AddA
+    use *b [X | Y] as AddB
+    use -a [X | Y] as RemA
+    link
+        X >-> AddA.X
+        AddA.Y >-> AddB.X
+        AddB.Y >-> RemA.X
+        RemA.Y >-> Y

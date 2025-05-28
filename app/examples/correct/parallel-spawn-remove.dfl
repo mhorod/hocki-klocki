@@ -1,0 +1,8 @@
+def f = <b|a> [X | Y, Z]
+    use *a [X | Y] as SpawnA
+    use -b [X | Y] as RemB
+    link
+        X >-> SpawnA.X
+        X >-> RemB.X
+        SpawnA.Y >-> Y
+        RemB.Y >-> Z

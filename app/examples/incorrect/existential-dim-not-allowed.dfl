@@ -1,0 +1,14 @@
+def existential = <a|> [X | Y]
+    use +a [X | Y] as AddA
+    link
+        X >-> AddA.X
+        AddA.Y >-> Y
+
+def main = <|a>[X1, X2 | Y1, Y2]
+    use *a [X | Y] as AddA
+    use existential<a|> [X | Y] as Troll
+    link
+        X1 >-> AddA.X
+        AddA.Y >-> Y1
+        X1 >-> Troll.X
+        Troll.Y >-> Y2

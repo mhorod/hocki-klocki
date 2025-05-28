@@ -1,0 +1,8 @@
+def sus = <a |> [X | Y0, Y1]
+    use +a[X | Y] as AddA
+    use -a[X | Y] as RemA
+    link
+        X >-> AddA.X
+        X >-> RemA.X
+        AddA.Y >-> Y0
+        RemA.Y >-> Y1

@@ -10,7 +10,8 @@ lazy val root = (project in file("."))
     libraryDependencies ++=
       Seq(
         "org.scala-lang.modules" %% "scala-parser-combinators" % "2.4.0",
-        "com.lihaoyi" %% "upickle" % "4.1.0"
+        "com.lihaoyi" %% "upickle" % "4.1.0",
+        "org.scalatest" %% "scalatest" % "3.2.19",
       ),
     assembly / mainClass := Some("Main"), // for sbt-assembly
     assembly / assemblyJarName := "app.jar", // for sbt-assembly

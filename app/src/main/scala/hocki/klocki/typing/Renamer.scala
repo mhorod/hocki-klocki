@@ -39,8 +39,6 @@ class Renamer(schemaIface: SchemaIface, useIface: SchemaIface, dims: SchemaDims)
           (dimDiff.map(dim => EquivNamed(dim, lhs, rhs)) + EquivUnnamed(lhs, rhs))
             .map(_.mapDimSetVars(dimSetVarMapping))
         case _ => Set(constraint.mapDims(dimMapping).mapDimSetVars(dimSetVarMapping))
-    if renamed.nonEmpty then
-      println(s"Renaming $constraint --> ${renamed.mkString(", ")}")
     renamed
 
   def rename(constraints: Iterable[Constraint]): Iterable[Constraint] =

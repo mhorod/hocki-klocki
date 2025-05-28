@@ -1,8 +1,0 @@
-def jeronie = <a |> [|]
-    use wrappedAdd <a |> [X | Y] as AddA
-    use wrappedRemove <a |> [X | Y] as RemoveA
-    link AddA.Y >-> RemoveA.X, RemoveA.Y >-> AddA.X
-
-def wrappedAdd = <a |> [X | Y] use +a [X | Y] as AddA link X >-> AddA.X, AddA.Y >-> Y
-
-def wrappedRemove = <a |> [X | Y] use -a [X | Y] as RemoveA link X >-> RemoveA.X, RemoveA.Y >-> Y

@@ -1,0 +1,18 @@
+def looped_wrappers = <a |> [|]
+    use wrapped_add <a |> [X | Y] as AddA
+    use wrapped_remove <a |> [X | Y] as RemA
+    link
+        AddA.Y >-> RemA.X
+        RemA.Y >-> AddA.X
+
+def wrapped_add = <a |> [X | Y]
+    use +a [X | Y] as AddA
+    link
+        X >-> AddA.X
+        AddA.Y >-> Y
+
+def wrapped_remove = <a |> [X | Y]
+    use -a [X | Y] as RemA
+    link
+        X >-> RemA.X
+        RemA.Y >-> Y

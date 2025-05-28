@@ -1,0 +1,8 @@
+def f = <a, b|> [X | Y, Z]
+    use +a [X | Y] as AddA
+    use -b [X | Y] as RemB
+    link
+        X >-> AddA.X
+        X >-> RemB.X
+        AddA.Y >-> Y
+        RemB.Y >-> Z

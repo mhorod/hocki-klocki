@@ -1,7 +1,7 @@
 package hocki.klocki.typing
 
 import hocki.klocki.entities.{Dim, DimSetVar}
-import hocki.klocki.typing.Constraint.{In, InUnion, InductionNamed, InductionUnnamed, NotIn, EquivNamed, EquivUnnamed}
+import hocki.klocki.typing.Constraint.{EquivNamed, EquivUnnamed, In, InUnion, InductionNamed, InductionUnnamed, NotIn}
 
 object ComposeInductionsNamed extends ConstraintObserver:
   override def observe
@@ -49,13 +49,22 @@ class PropagateEquivsUp(decomposer: Decomposer) extends ConstraintObserver:
         else
           Set()
       case EquivNamed(dim, lhs, rhs) =>
-        val decomposedLhs = decomposer.decomposeNamed(dim, lhs)
-        val decomposedRhs = decomposer.decomposeNamed(dim, rhs)
-        if decomposedLhs != decomposedRhs then
-          Set(decomposedLhs <=| dim |=> decomposedRhs)
+        given Set[In] = constraints.findInByDim(dim)
+        val deducedInUnions = PropagateEquivsUp.shatter(dim, lhs, rhs) ++ PropagateEquivsUp.shatter(dim, rhs, lhs)
+        if deducedInUnions.nonEmpty then
+          deducedInUnions
         else
-          Set()
+          val decomposedLhs = decomposer.decomposeNamed(dim, lhs)
+          val decomposedRhs = decomposer.decomposeNamed(dim, rhs)
+          if decomposedLhs != decomposedRhs then
+            Set(decomposedLhs <=| dim |=> decomposedRhs)
+          else
+            Set()
       case _ => Set()
+
+private object PropagateEquivsUp:
+  private def shatter(dim: Dim, assumed: Set[DimSetVar], implied: Set[DimSetVar])(using Set[In]): Set[Constraint] =
+    if isSatisfiedUnion(dim, assumed) then Set(dim inUnion implied) else Set()
 
 class PropagateInUnionsUp(decomposer: Decomposer) extends ConstraintObserver:
   override def observe(newConstraint: Constraint, constraints: Constraints): Set[Constraint] =

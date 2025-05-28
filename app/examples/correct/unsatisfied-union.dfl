@@ -1,0 +1,10 @@
+def main = <a |> [X0, X1 | Y]
+    use -a [X | Y] as RemA0
+    use U{2} [X0, X1 | Y] as Union
+    use -a [X | Y] as RemA1
+    link
+        X0 >-> RemA0.X
+        RemA0.Y >-> Union.X0
+        X1 >-> Union.X1
+        Union.Y >-> RemA1.X
+        RemA1.Y >-> Y

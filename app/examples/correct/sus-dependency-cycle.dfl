@@ -1,0 +1,12 @@
+def main = <|a, b> [X|Y1, Y2]
+    use -a [X | Y] as RemA
+    use -a [X | Y] as RemA2
+    use *a [X | Y] as SpawnA
+    use *b [X | Y] as SpawnB
+    link
+        X >-> RemA.X
+        X >-> SpawnB.X
+        SpawnB.Y >-> RemA2.X
+        RemA2.Y >-> SpawnA.X
+        SpawnA.Y >-> Y1
+        RemA.Y >-> Y2

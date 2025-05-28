@@ -1,0 +1,16 @@
+def f = <a |> [X | Y]
+    use <> [X | Y0, Y1] as If
+    use +a [X | Y] as AddA
+    use *b [X | Y] as SpawnB
+    use -b [X | Y] as RemB
+    use f <a |> [X | Y] as Recursive
+    use >< [X0, X1 | Y] as Join
+    link
+        X >-> If.X
+        If.Y0 >-> AddA.X
+        AddA.Y >-> Join.X0
+        If.Y1 >-> SpawnB.X
+        SpawnB.Y >-> Recursive.X
+        Recursive.Y >-> RemB.X
+        RemB.Y >-> Join.X1
+        Join.Y >-> Y

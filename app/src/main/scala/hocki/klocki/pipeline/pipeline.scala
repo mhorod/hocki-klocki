@@ -3,18 +3,27 @@ package hocki.klocki.pipeline
 import hocki.klocki.analysis.resolveNames
 import hocki.klocki.ast.{Toplevel, addPrelude}
 import hocki.klocki.parsing.DflParser
-import hocki.klocki.typing.{inferTypes, instantiateSchemata}
+import hocki.klocki.typing.{Typing, inferTypes, instantiateSchemata}
 import hocki.klocki.visualize.graph.{buildProgram, programToJson}
 import hocki.klocki.visualize.presentTyping
 
 import java.io.{BufferedWriter, FileWriter}
 import scala.io.Source.fromFile
 
-def runPipeline
+def runPipeline(filename: String): Either[String, Typing] =
+  try
+    val Some(tree) = load(filename): @unchecked
+    val names = resolveNames(tree)
+    val schemata = instantiateSchemata(tree, names)
+    val typing = inferTypes(schemata, names.primitives)
+    Right(typing)
+  catch
+    case e: Throwable => Left(f"Error: $e")
+
+def execPipeline
 (
   filename: String,
   outputFilename: String,
-  expansionDepth: Int,
   typingFilename: Option[String],
 ): Boolean =
   load(filename) match
@@ -36,13 +45,10 @@ def runPipeline
               val schemata = instantiateSchemata(tree, names)
               inferTypes(schemata, names.primitives)
             catch
-              case e: StackOverflowError =>
-                writeToFile("typing poszedł w buraki", filename)
-                return false
               case e: Exception =>
                 println(e.getMessage)
                 e.printStackTrace()
-                writeToFile(s"<typing error> $e", filename)
+                writeToFile(s"<typing error> ${e.getMessage}", filename)
                 return false
           val typingPresentation = presentTyping(typing)
           writeToFile(typingPresentation, filename)

@@ -1,0 +1,34 @@
+def two = <a, b |> [X0, X1 | Y0, Y1]
+    use +a [X | Y] as AddA
+    use -b [X | Y] as RemB
+    link
+        X0 >-> AddA.X
+        AddA.Y >-> Y0
+        X1 >-> RemB.X
+        RemB.Y >-> Y1
+
+def combine_sequential = <a, b |> [X0, X1 | Y0, Y1]
+    use two <a, b |> [X0, X1 | Y0, Y1] as Fst
+    use two <a, b |> [X0, X1 | Y0, Y1] as Snd
+    link
+        X0 >-> Fst.X0
+        X1 >-> Fst.X1
+        Fst.Y0 >-> Snd.X1
+        Fst.Y1 >-> Snd.X0
+        Snd.Y0 >-> Y0
+        Snd.Y1 >-> Y1
+
+def combine_parallel = <a, b |> [X0, X1 | Y0]
+    use two <a, b |> [X0, X1 | Y0, Y1] as Fst
+    use two <a, b |> [X0, X1 | Y0, Y1] as Snd
+    use U{4} [V0, V1, V2, V3 | W]
+    link
+        X0 >-> Fst.X0
+        X0 >-> Snd.X1
+        X1 >-> Fst.X1
+        X1 >-> Snd.X0
+        Fst.Y0 >-> V0
+        Fst.Y1 >-> V1
+        Snd.Y0 >-> V2
+        Snd.Y1 >-> V3
+        W >-> Y0

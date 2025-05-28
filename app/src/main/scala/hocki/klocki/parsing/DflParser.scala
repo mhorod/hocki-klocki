@@ -124,7 +124,7 @@ object DflParser extends RegexParsers:
 
   // Links
 
-  private def link: Parser[Link] = ("link" ~> repsep(connectionDecl, ",")) ^^ {
+  private def link: Parser[Link] = ("link" ~> repsep(connectionDecl, opt(","))) ^^ {
     Link(_)
   }
 

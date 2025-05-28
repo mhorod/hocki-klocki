@@ -1,0 +1,45 @@
+def f = <a, b | c> [X1, X2, X3, X4 | Y]
+    use >< [X1, X2 | Y] as Join1
+    use >< [X1, X2 | Y] as Join2
+    use >< [X1, X2 | Y] as Join3
+    use -b [X | Y] as RemB
+    use +a [X | Y] as AddA
+    use *c [X | Y] as SpawnC
+    use U{0} [| Y] as Nothing
+    use U{2} [X1, X2 | Y] as UpperUnion2
+    use U{2} [X1, X2 | Y] as UpperUnion3
+    use U{2} [X1, X2 | Y] as UpperUnion4
+    use U{2} [X1, X2 | Y] as LowerUnion
+    link
+        Nothing.Y >-> SpawnC.X
+        X2 >-> UpperUnion2.X1
+        SpawnC.Y >-> UpperUnion2.X2
+        X3 >-> UpperUnion3.X1
+        SpawnC.Y >-> UpperUnion3.X2
+        X4 >-> UpperUnion4.X1
+        SpawnC.Y >-> UpperUnion4.X2
+        UpperUnion2.Y >-> LowerUnion.X2
+        UpperUnion3.Y >-> RemB.X
+        X1 >-> Join1.X1
+        X2 >-> Join1.X2
+        RemB.Y >-> Join2.X1
+        UpperUnion4.Y >-> Join2.X2
+        Join2.Y >-> Join3.X2
+        Join1.Y >-> LowerUnion.X1
+        LowerUnion.Y >-> Join3.X1
+        Join3.Y >-> AddA.X
+        AddA.Y >-> Y
+
+def absolutne_kino = <a, b | c> [|]
+    use f <a, b | c> [X1, X2, X3, X4 | Y] as F
+    use -a [X | Y] as RemA
+    use +b [X | Y] as AddB
+    use -c [X | Y] as RemC
+    link
+        F.Y >-> RemC.X
+        RemA.Y >-> F.X1
+        RemA.Y >-> F.X4
+        RemA.Y >-> AddB.X
+        RemA.Y >-> F.X2
+        AddB.Y >-> F.X3
+        RemC.Y >-> RemA.X

@@ -1,0 +1,7 @@
+def f = <| a> [X | Y]
+    use *a [X | Y] as SpawnA
+    use -a [X | Y] as RemA
+    link
+        X >-> SpawnA.X
+        SpawnA.Y >-> RemA.X
+        RemA.Y >-> Y

@@ -1,4 +1,4 @@
-import hocki.klocki.pipeline.runPipeline
+import hocki.klocki.pipeline.execPipeline
 
 object Main:
   def main(args: Array[String]): Unit =
@@ -10,11 +10,11 @@ object Main:
 
     val filename = args(0)
     val outputFilename = args(1)
-    val expansionDepth = if args.length > 2 then args(2).toInt else 0
+    val _expansionDepth = if args.length > 2 then args(2).toInt else 0
     val typingFilename = if args.length > 3 then Some(args(3)) else None
 
     try
-      val msg = if runPipeline(filename, outputFilename, expansionDepth, typingFilename) then "OK" else "FAIL"
+      val msg = if execPipeline(filename, outputFilename, typingFilename) then "OK" else "FAIL"
       println(msg)
     catch
       case e: Exception => {
