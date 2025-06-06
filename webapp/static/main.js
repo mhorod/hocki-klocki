@@ -1,83 +1,67 @@
 const examples = [
 `
-def main = [X | Y]
-    use -a [X | Y] as RemoveA
+def f = <a, b |> [X0, X1 | Y]
+    use -a [X | Y] as RemAUpper
+    use U{2} [X0, X1 | Y] as Union
+    use -a [X | Y] as RemALower
+    use -b [X | Y] as RemB
+    use +b [X | Y] as AddB
+    link
+        X0 >-> RemAUpper.X
+        X1 >-> AddB.X
+        RemAUpper.Y >-> Union.X0
+        AddB.Y >-> Union.X1
+        Union.Y >-> RemALower.X
+        RemALower.Y >-> RemB.X
+        RemB.Y >-> Y
+`,
+`
+def f = <a |> [X | Y]
+    use <> [X | Y0, Y1] as If
     use +a [X | Y] as AddA
+    use *b [X | Y] as SpawnB
+    use -b [X | Y] as RemB
+    use f <a |> [X | Y] as Recursive
+    use >< [X0, X1 | Y] as Join
     link
-        X >-> RemoveA.X,
-        RemoveA.Y >-> AddA.X,
-        AddA.Y >-> Y
+        X >-> If.X
+        If.Y0 >-> AddA.X
+        AddA.Y >-> Join.X0
+        If.Y1 >-> SpawnB.X
+        SpawnB.Y >-> Recursive.X
+        Recursive.Y >-> RemB.X
+        RemB.Y >-> Join.X1
+        Join.Y >-> Y
 `,
 `
-def main = [X1, X2 | Y]
-    use U{2} [X1, X2 | Y] as U2
-    use +a [X | Y] as AddA
+def f = <a, b|> [X1, X2, X3 | Y]
+    use U{2} [X1, X2 | Y] as U
+    use >< [X1, X2 | Y] as Join
+    use -a [X | Y] as RemA
+    use +b [X | Y] as AddB
     link
-        X1 >-> U2.X1, X2 >-> U2.X2,
-        U2.Y >-> AddA.X, 
-        AddA.Y >-> Y
+        X1 >-> U.X1 
+        X2 >-> AddB.X, AddB.Y >-> U.X2
+        U.Y >-> Join.X1
+        X3 >-> RemA.X, RemA.Y >-> Join.X2
+        Join.Y >-> Y 
 `,
 `
-def main = [X1, X2 | Y]
-    use U{2} [X1, X2 | Y] as U2
-    use -a [X | Y] as RemoveA
-    link
-        X1 >-> U2.X1, X2 >-> U2.X2,
-        U2.Y >-> RemoveA.X, 
-        RemoveA.Y >-> Y
-`,
-`
-def main = [X | Y]
-    use +a [X | Y] as AddA
-    use -a [X | Y] as RemoveA
-    use U{2} [X1, X2 | Y] as U2
-    link
-        X >-> AddA.X,
-        X >-> RemoveA.X,
-        AddA.Y >-> U2.X1,
-        RemoveA.Y >-> U2.X2,
-        U2.Y >-> Y
-`,
-`
-def main = [X1, X2 | Y]
+def f = [X|Y]
     use f [X | Y] as F
-    use g [X | Y] as G
-    use U{2} [X1, X2 | Y] as U2
     link
-        X1 >-> F.X,
-        X2 >-> G.X,
-        F.Y >-> U2.X1,
-        G.Y >-> U2.X2,
-        U2.Y >-> Y
-        
-def g = [X | Y]
-    use f [X | Y] as F
-    use -b [X | Y] as RemoveB
-    link
-        X >-> F.X,
-        F.Y >-> RemoveB.X,
-        RemoveB.Y >-> Y
-        
-def f = [X | Y]
-    use +a [X | Y] as AddA
-    link
-        X >-> AddA.X,
-        AddA.Y >-> Y
+        X >-> F.X
+        F.Y >-> Y
 
-`,
-`
-def f = [X | Y]
-    use +a [X | Y] as AddA
-    use f [X | Y] as F
-    use U{2} [X1, X2 | Y] as U2
-    link
-        X >-> AddA.X,
-        X >-> F.X,
-        AddA.Y >-> U2.X1,
-        F.Y >-> U2.X2,
-        U2.Y >-> Y
-`
-]
+
+def main = <a|> [X | Y]
+  use f [X | Y] as F
+  use +a [X | Y] as AddA
+  link
+    X >-> AddA.X
+    AddA.Y >-> F.X
+    F.Y >-> Y
+`]
 
 function selectExample() {
     const selection = exampleSelectElement.value;
